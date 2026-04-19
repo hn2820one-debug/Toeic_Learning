@@ -1,181 +1,240 @@
 # TOEIC Trainer
 
-TOEIC Trainer is a personal TOEIC study dashboard built with Next.js, Prisma, and SQLite. The current build focuses on a stable minimum workflow: the app starts correctly, the dashboard loads from the database, the question bank is usable, a basic training session can be completed end-to-end on Windows, and completed session history can be reviewed from the UI.
+## 1. Project overview
 
-## Current Status
+**TOEIC Trainer** is a personal, local-first web app for TOEIC-style multiple-choice practice. It uses **Next.js 14 (App Router)**, **Prisma 7**, and **SQLite** (via the libSQL adapter). The app is past the “empty scaffold” stage: it has a working **dashboard**, **question bank with CRUD**, **JSON and CSV import**, **training with FSRS ratings**, **session history**, **weekly report**, **HTTP export APIs**, and **optional LLM-assisted features** (generation, verification, explanations, weekly narrative) when API keys are configured.
 
-- Dashboard is live and reads summary data from SQLite.
-- Question Bank supports local filtering by topic, difficulty, and keyword, plus single-question create, edit, and safe delete management.
-- Training supports a short 5-question run, stores answers in SQLite, and shows a basic session result.
-- Navigation, layout, and core project structure are in place.
-- History is available for completed training sessions.
-- Weekly Report is available as a minimal 7-day summary based on completed training sessions.
-- Import accepts a fixed JSON file format and writes new question rows into QuestionBankItem.
-- Topic and difficulty now use shared normalization rules across create, edit, import, and seed preparation.
+**Maturity (honest):** Solid for **self-hosted daily study** on your machine: data stays in SQLite, core flows are implemented end-to-end. LLM features depend on external APIs, quotas, and keys—treat them as **optional enhancements**, not guaranteed production services. Listening content exists in the **schema** as legacy/stub models; the **current UI workflow** is centered on **reading-style** `QuestionBankItem` training, not a full listening player.
 
-## Tech Stack
+**Major workflows today:**
 
-- Next.js 14 App Router
-- React 18
-- TypeScript
-- Tailwind CSS 4
-- Prisma 7
-- SQLite via Prisma libsql adapter
+- Browse and manage questions; import batches (JSON or CSV); optionally rebuild the **personalized Phase 1 bank** from seed data.
+- Start **training**: questions are drawn from `QuestionBankItem`, answers and FSRS/ELO updates are persisted.
+- Review **history** and a rolling **7-day report** (with optional Gemini-powered weekly copy if configured).
+- **Export** questions, history, or a full DB backup over HTTP (with localhost or shared-secret protection).
 
-## Routes
+---
 
-- /: Dashboard with learning item count, due review count, session count, and latest score
-- /training: 5-question training flow backed by StudySession and AnswerHistory
-- /questions: Question bank with server-side filter/search and management entry points
-- /questions/new: Dedicated QuestionBankItem create page with server-side validation
-- /questions/[id]/edit: Dedicated QuestionBankItem edit page with validation and safe delete rules
-- /history: Completed StudySession history with expandable answer details
-- /report: Rolling 7-day weekly report with summary totals and topic breakdown
-- /import: Fixed-format JSON import for QuestionBankItem
+## 2. Current core features
 
-## Project Structure
+- **Dashboard:** Summary stats (e.g. bank size, due reviews, recent activity), grammar/topic-oriented widgets where data exists. Bilingual UI labels (Chinese + English) on main pages.
+- **Question bank:** List, filter, and search by text, topic, and difficulty; search also matches **`notes`** (classification strings).
+- **Create / edit / delete:** `/questions/new` and `/questions/[id]/edit` with validation; delete is guarded by usage rules.
+- **JSON import:** `/import` — paste or upload fixed-shape JSON; validates, normalizes, skips duplicates.
+- **CSV import:** Same page: **Preview** then **Commit** via server-side parsing (multipart form and server actions); avoids fragile client-side file reading issues.
+- **Training:** Session-based flow; reveal answer; FSRS rating buttons; ties into scheduling state.
+- **History:** Completed sessions with per-answer detail.
+- **Weekly report:** Rolling window summary; may call an LLM for narrative text when configured.
+- **Export routes:** `GET /api/export/questions`, `GET /api/export/history`, and `GET /api/export/backup` — see **Export API** below.
+- **LLM routes:** Under `/api/llm/` — for example Part 5 generate/verify, explain wrong answer, weekly report helper. Successful calls log usage in `LlmUsageLog`.
+- **Personalized Phase 1 bank:** Large curated bank in `prisma/seed-data/personalized-phase1-bank.ts`. A full reset and reload uses `npm run db:rebuild-phase1-bank` (this is **destructive** to runtime learning data — read warnings in this README and in the script before use).
+- **Listening schema:** `ListeningSetLegacy` and `ListeningQuestionLegacy` (legacy-oriented) and `ListeningSetV2` / `ListeningQuestionV2` (stub for future). There is **no first-class listening practice UI** in the current trainer flow.
 
-- src/app: App Router pages and global layout
-- src/components/layout: Shared sidebar navigation
-- src/lib/prisma.ts: Prisma client setup using DATABASE_URL and PrismaLibSql
-- src/lib/questions.ts: Question bank queries and filter helpers
-- src/lib/question-fields.ts: Shared topic/difficulty normalization and question validation rules
-- src/lib/question-management.ts: Single-question create/edit validation, persistence, and safe delete helpers
-- src/lib/training.ts: Training session loading, validation, and answer persistence helpers
-- src/lib/history.ts: Completed session history queries and answer detail helpers
-- src/lib/import.ts: Fixed-format question import validation and write helpers
-- prisma/schema.prisma: Database schema
-- generated/prisma: Generated Prisma client output
-- dev.db: Local SQLite database file
+---
 
-## Getting Started
+## 3. Architecture summary
+
+**Source of truth for the main trainer:** **`QuestionBankItem`** (table `questions`). All training, history snapshots, and FSRS card state refer to these rows.
+
+**Session model:**
+
+- **`StudySession`** — one training run (timestamps, counts, mode).
+- **`StudySessionQuestion`** — ordered questions in that session (links session ↔ question).
+- **`AnswerHistory`** — one row per answered question with snapshots for reproducibility.
+
+**FSRS:** `FsrsCardState` + `ReviewLog` + `FsrsParams` — spaced repetition state per question (via `ts-fsrs`).
+
+**ELO:** `EloState` — user/item style ratings for adaptive signals.
+
+**LLM:** `LlmUsageLog` stores token/cost/latency metadata for server-side LLM calls.
+
+**Active vs legacy / secondary models:** The schema still contains **older or parallel** structures (`LearningItem`, `QuestionItem`, `DailySession`, `SessionAnswer`, `ReviewQueue`, etc.) from earlier designs. **The App Router pages documented here use `QuestionBankItem` + `StudySession` flows.** Do not assume every table has a visible UI.
+
+**Classification without schema migration:** The optional **`notes`** field on `QuestionBankItem` often holds a structured label such as `字彙 / Vocabulary | …` or `文法 / Grammar | …` (see `src/lib/question-taxonomy.ts`). This drives badges on `/questions` and keeps grammar stats coherent—**do not treat arbitrary free text in `notes` as grammar points.**
+
+---
+
+## 4. Development setup
 
 ### Prerequisites
 
-- Node.js 20 or newer recommended
-- npm
+- **Node.js 20+** (recommended)
+- **npm**
 
-### Environment
-
-Create a .env file in the project root if needed:
-
-```env
-DATABASE_URL="file:./dev.db"
-GEMINI_API_KEY=""
-ANTHROPIC_API_KEY=""
-OPENAI_API_KEY=""
-```
-
-LLM provider keys are server-only secrets. Do not use a `NEXT_PUBLIC_` prefix for any of them.
-
-### Export API (CSV / JSON backup)
-
-The routes `GET /api/export/questions`, `GET /api/export/history`, and `GET /api/export/backup` are protected as follows:
-
-- If **`EXPORT_API_SECRET`** is **not** set (empty or unset), only requests whose **`Host`** header is loopback are allowed (`127.0.0.1`, `localhost`, or `[::1]`, with or without a port). Other hosts receive **403** JSON.
-- If **`EXPORT_API_SECRET`** is set to a non-empty string, every client must send header **`X-Export-Secret`** with the exact same value, including when calling from localhost. Otherwise **401** JSON.
-
-Local use: open or `curl http://127.0.0.1:5173/api/export/questions` with no extra headers when `EXPORT_API_SECRET` is unset. Remote access: set the env var and pass the header.
-
-### Install Dependencies
+### Install
 
 ```bash
 npm install
 ```
 
-### Run the Development Server
+`postinstall` runs `prisma generate` so the client in `generated/prisma` matches the schema.
+
+### Environment files
+
+Prisma CLI reads **`DATABASE_URL`** from **`.env.local`** first, then **`.env`** (`prisma.config.ts`). The runtime Prisma client defaults `DATABASE_URL` to `file:./dev.db` if unset (`src/lib/prisma.ts`), but **migrations** expect the variable to be set for consistency.
+
+Place secrets in **`.env.local`** (preferred for local dev) or **`.env`**. Never commit real keys.
+
+### Run dev
 
 ```bash
 npm run dev
 ```
 
-Open the app at:
+Opens **http://127.0.0.1:5173** (port **5173** avoids common Windows reserved port issues—see older README note).
 
-```text
-http://127.0.0.1:5173
-```
-
-### Production Build Check
+### Production build
 
 ```bash
 npm run build
 ```
 
-## Available Scripts
+### Production server
 
-- npm run dev: Start Next.js on 127.0.0.1:5173
-- npm run build: Create a production build
-- npm run start: Start the production server
-- npm run db:generate: Regenerate Prisma client
-- npm run db:migrate: Run Prisma migrations in development
-- npm run db:studio: Open Prisma Studio
-- npm run db:seed: Run the seed script
-- npm run test:llm-env: Check that server-side LLM API keys are readable without making any external API call
-
-## Database Notes
-
-- The project uses SQLite with Prisma.
-- Prisma connection config reads DATABASE_URL through prisma.config.ts.
-- Runtime access is configured in src/lib/prisma.ts through PrismaLibSql.
-- Question bank records live in the questions table.
-- Accepted normalized question format uses `difficulty` values A, B, or C only.
-- Topic values are trimmed and repeated internal whitespace is collapsed before persistence.
-- `correctAnswer` is normalized to uppercase and must be A, B, C, or D.
-- Training writes StudySession and AnswerHistory records for each completed run.
-- The project intentionally avoids better-sqlite3 in this environment because native module loading failed on Windows.
-
-## Normalized Seed Format
-
-Use the same normalized object shape for `/import` and future larger structured seed data:
-
-```json
-[
-	{
-		"questionText": "The accounting manager requested a revised invoice before approving the payment.",
-		"optionA": "revised invoice",
-		"optionB": "security badge",
-		"optionC": "warehouse shelf",
-		"optionD": "office umbrella",
-		"correctAnswer": "A",
-		"explanation": "A revised invoice is the only option that fits the payment approval context.",
-		"topic": "Finance",
-		"difficulty": "A"
-	}
-]
+```bash
+npm run start
 ```
 
-- `questionText`, `optionA`, `optionB`, `optionC`, `optionD`, and `topic` must be non-empty after trimming.
-- `topic` is stored after trimming and collapsing repeated internal whitespace.
-- `correctAnswer` is normalized to uppercase and must be A, B, C, or D.
-- `difficulty` is normalized to uppercase and must be A, B, or C.
-- `explanation` is optional and blank values are stored as null.
-- Import skips rows whose `questionText` already exists or already appeared earlier in the same file.
+Uses Next’s default (**port 3000** unless `PORT` is set). Do not assume 5173 for `next start`.
 
-## Windows Port Note
+### Smoke / utility scripts (selected)
 
-On this machine, ports 3000 and 3001 fall inside a Windows excluded TCP port range. The active network stack includes HNS, Hyper-V, WinNAT, and WSL docker-desktop networking, which can reserve those ports. Because of that, the development script defaults to port 5173.
+- **`npm run smoke:csv-import`** — end-to-end CSV import smoke (server conditions); inserts and removes tagged rows.
+- **`npm run test:llm-env`** — verifies LLM env readers resolve (no network call).
+- **`npm run test:fsrs`** / **`npm run elo:decay`** — maintenance/verification utilities as needed.
 
-If you see listener errors on 3000 or 3001, use the default npm run dev command instead of forcing those ports.
+### Prisma client
 
-## Current Limitations
+```bash
+npm run db:generate
+```
 
-- The training flow is intentionally minimal and does not yet implement spaced repetition, review scheduling, or analytics.
-- The dashboard still uses its original summary queries and does not yet surface StudySession history.
-- The app works with an empty database, but question and training pages require seeded or imported questions to be useful.
-- Import is intentionally minimal and currently supports JSON files only.
-- History is intentionally minimal and currently focuses on completed sessions only.
-- Weekly Report is intentionally minimal and currently focuses on a fixed rolling 7-day window without charts.
-- Question management is intentionally minimal and currently supports one-question create/edit/delete only.
+**After schema changes or pulling migrations:** regenerate and **restart `next dev`** (stale cached Prisma on `globalThis` can break API routes—see caveats).
 
-## Verification Summary
+### Migrations
 
-- Production build completes successfully with npm run build.
-- Development server starts successfully on 127.0.0.1:5173.
-- Dashboard responds with HTTP 200 in local testing.
-- /questions responds with HTTP 200 and renders seeded question content.
-- /questions/new responds with HTTP 200 and can create one QuestionBankItem from the UI with validation.
-- /questions/[id]/edit can be used to review and correct one QuestionBankItem from the UI.
-- /training responds with HTTP 200 and can persist StudySession and AnswerHistory records in SQLite.
-- /history responds with HTTP 200, renders completed sessions newest first, and shows expandable answer details.
-- /report responds with HTTP 200 and renders a rolling 7-day summary plus topic breakdown from completed sessions.
-- /import responds with HTTP 200 and supports fixed-format JSON question imports with shared validation, normalization, duplicate skipping, and result summaries.
+```bash
+npm run db:migrate
+```
+
+### Database backup (filesystem)
+
+```bash
+npm run backup
+```
+
+PowerShell script copies the SQLite file to a timestamped backup (see `scripts/backup-db.ps1`).
+
+### Seed / Phase 1 bank
+
+```bash
+npm run db:seed
+```
+
+Seeds from the personalized Phase 1 dataset. **Full rebuild** (wipes active learning tables and reloads bank—use with care):
+
+```bash
+npm run db:rebuild-phase1-bank
+```
+
+### Delete one stray session (by id)
+
+```bash
+npm run db:delete-session -- <sessionId>
+```
+
+---
+
+## 5. Environment variables
+
+- **`DATABASE_URL`** — SQLite URL, e.g. `file:./dev.db`. **Required** for Prisma CLI consistency; the runtime client can default if unset.
+- **`GEMINI_API_KEY`** — Google Generative Language API (e.g. weekly report, some generation paths). **Optional** unless you use those features.
+- **`ANTHROPIC_API_KEY`** — Claude API (e.g. explanations, verification). **Optional** unless you use those features.
+- **`OPENAI_API_KEY`** — Present in provider helpers. **Optional** unless a code path you use requires it.
+- **`EXPORT_API_SECRET`** — If **unset or empty**, export routes only accept **loopback** hosts (`127.0.0.1`, `localhost`, `[::1]`). If **set to a non-empty string**, every client (including localhost) must send header **`X-Export-Secret`** with the exact same value.
+
+All LLM keys are **server-only**. Do not prefix them with `NEXT_PUBLIC_`.
+
+Put values in **`.env.local`** (preferred) or **`.env`** in the project root. Do not commit real secrets.
+
+---
+
+## 6. Export API (CSV / JSON / backup)
+
+Routes:
+
+- `GET /api/export/questions`
+- `GET /api/export/history`
+- `GET /api/export/backup`
+
+Behavior is implemented in `src/lib/export/auth.ts` (localhost vs shared secret). For non-local access, set `EXPORT_API_SECRET` and pass `X-Export-Secret`.
+
+---
+
+## 7. Known limitations and caveats
+
+**Self-use readiness:** Core study loops (bank → train → history → report) are suitable for a **single user** on a **trusted machine**. This is not a multi-tenant SaaS hardening pass.
+
+**Partial / variable:**
+
+- **LLM** features need keys, network, and provider quotas; costs accrue per `LlmUsageLog` semantics.
+- **Listening** tables are **not** driving the main training UI yet.
+- **Legacy tables** remain in SQLite for compatibility; some are unused by current pages.
+
+**Development:**
+
+- **`next dev` + stale Prisma:** after `prisma generate` or schema edits, restart dev server. Symptom: export/backup route throws `findMany` on undefined delegate.
+- **`.next` cache:** rare odd runtime after large changes—delete `.next`, `npm run build` again.
+
+**Data:**
+
+- **`notes`** may encode taxonomy; free-text `notes` from old imports can differ.
+- **`db:rebuild-phase1-bank`** is destructive for sessions/history/FSRS/ELO aggregates—backup first.
+
+---
+
+## 8. Recommended developer workflow
+
+1. **`npm run backup`** (or copy `dev.db`) before risky data operations.
+2. Edit code; keep changes focused.
+3. **`npm run build`** before considering work done.
+4. Optional: **`npm run smoke:csv-import`** or quick manual browser checks (`/import`, `/training`, `/history`).
+5. **`git status`**, stage, commit with a clear message.
+
+---
+
+## 9. Normalized question shape (JSON / seed)
+
+Same rules as imports: `difficulty` **A/B/C**, `correctAnswer` **A–D**, trimmed topics, optional `explanation`, optional `grammarPoints` / `priorKnown` where the pipeline expects them. CSV column mapping is documented on **`/import`**.
+
+---
+
+## 10. Windows port note
+
+Ports **3000** and **3001** may fall inside an excluded TCP range on some Windows setups. Development defaults to **5173**. Use `npm run dev` as configured; for production `next start`, set **`PORT`** if 3000 conflicts.
+
+---
+
+## 11. Troubleshooting: `/api/export/backup` returns 500 in `next dev`
+
+If the error mentions **`Cannot read properties of undefined (reading 'findMany')`**, the dev server is likely holding a **stale Prisma client**. Run **`npm run db:generate`** and **restart `next dev`**. `next start` often works because it is a fresh process.
+
+---
+
+## Manual browser smoke (short)
+
+With `npm run dev`:
+
+1. `/questions/new` — create one question.
+2. `/questions/[id]/edit` — edit and save.
+3. `/import` — CSV: choose file → Preview → Commit (or JSON section as offered).
+4. `/training` — complete a short session.
+5. `/history` — confirm the session appears.
+
+---
+
+## Verification expectations (local)
+
+- `npm run build` succeeds.
+- Main routes return **200** when the server is running and the DB is present.
+- Training persists `StudySession` / `AnswerHistory`; FSRS state updates when ratings are used.

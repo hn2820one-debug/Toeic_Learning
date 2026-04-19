@@ -61,7 +61,21 @@ Create a .env file in the project root if needed:
 
 ```env
 DATABASE_URL="file:./dev.db"
+GEMINI_API_KEY=""
+ANTHROPIC_API_KEY=""
+OPENAI_API_KEY=""
 ```
+
+LLM provider keys are server-only secrets. Do not use a `NEXT_PUBLIC_` prefix for any of them.
+
+### Export API (CSV / JSON backup)
+
+The routes `GET /api/export/questions`, `GET /api/export/history`, and `GET /api/export/backup` are protected as follows:
+
+- If **`EXPORT_API_SECRET`** is **not** set (empty or unset), only requests whose **`Host`** header is loopback are allowed (`127.0.0.1`, `localhost`, or `[::1]`, with or without a port). Other hosts receive **403** JSON.
+- If **`EXPORT_API_SECRET`** is set to a non-empty string, every client must send header **`X-Export-Secret`** with the exact same value, including when calling from localhost. Otherwise **401** JSON.
+
+Local use: open or `curl http://127.0.0.1:5173/api/export/questions` with no extra headers when `EXPORT_API_SECRET` is unset. Remote access: set the env var and pass the header.
 
 ### Install Dependencies
 
@@ -96,6 +110,7 @@ npm run build
 - npm run db:migrate: Run Prisma migrations in development
 - npm run db:studio: Open Prisma Studio
 - npm run db:seed: Run the seed script
+- npm run test:llm-env: Check that server-side LLM API keys are readable without making any external API call
 
 ## Database Notes
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { assertExportAllowed } from "@/lib/export/auth";
 import { rowsToCsv } from "@/lib/export/csv";
 import { prisma } from "@/lib/prisma";
 
@@ -19,7 +20,12 @@ const HEADERS = [
   "difficultySnapshot",
 ] as const;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = assertExportAllowed(request);
+  if (denied) {
+    return denied;
+  }
+
   const rows = await prisma.answerHistory.findMany({
     orderBy: { id: "asc" },
   });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { assertExportAllowed } from "@/lib/export/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,12 @@ function serializeDates<T>(rows: T[]): T[] {
   return JSON.parse(JSON.stringify(rows)) as T[];
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = assertExportAllowed(request);
+  if (denied) {
+    return denied;
+  }
+
   const [
     users,
     learningItems,

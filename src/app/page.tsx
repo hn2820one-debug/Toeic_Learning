@@ -1,3 +1,4 @@
+import DueHeatmap from "@/components/dashboard/DueHeatmap";
 import GrammarMasteryGrid from "@/components/dashboard/GrammarMasteryGrid";
 import TopicMasteryGrid from "@/components/dashboard/TopicMasteryGrid";
 import { getDashboardData } from "@/lib/dashboard";
@@ -198,6 +199,7 @@ export default async function DashboardPage() {
       <div className="mt-10 space-y-6">
         <TopicMasteryGrid />
         <GrammarMasteryGrid />
+        <DueHeatmap />
       </div>
     </div>
   );

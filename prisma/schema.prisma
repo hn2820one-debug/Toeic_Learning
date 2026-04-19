@@ -7,6 +7,20 @@ datasource db {
   provider = "sqlite"
 }
 
+enum FsrsState {
+  New
+  Learning
+  Review
+  Relearning
+}
+
+enum FsrsRating {
+  Again
+  Hard
+  Good
+  Easy
+}
+
 // ─────────────────────────────────────────────
 //  USERS
 // ─────────────────────────────────────────────
@@ -93,30 +107,157 @@ model QuestionBankItem {
   optionD       String
   correctAnswer String
   explanation   String?
+  notes         String?
+  priorKnown    Boolean?
   topic         String
   difficulty    String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   answerHistory AnswerHistory[]
+  fsrsCardState FsrsCardState?
+  reviewLogs    ReviewLog[]
+  studySessionItems StudySessionQuestion[]
 
   @@index([topic])
   @@index([difficulty])
   @@map("questions")
 }
 
+model FsrsCardState {
+  id            String           @id @default(cuid())
+  questionId    Int              @unique
+  question      QuestionBankItem @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  due           DateTime
+  stability     Float            @default(0)
+  difficulty    Float            @default(0)
+  elapsedDays   Float            @default(0)
+  scheduledDays Float            @default(0)
+  reps          Int              @default(0)
+  lapses        Int              @default(0)
+  state         FsrsState        @default(New)
+  lastReview    DateTime?
+  seededFrom    String?
+  suspended     Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([state, due])
+  @@index([state, createdAt])
+  @@map("fsrs_card_state")
+}
+
+model ReviewLog {
+  id              String           @id @default(cuid())
+  questionId      Int
+  question        QuestionBankItem @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  rating          FsrsRating
+  state           FsrsState
+  due             DateTime
+  stability       Float
+  difficulty      Float
+  elapsedDays     Float
+  lastElapsedDays Float
+  scheduledDays   Float
+  review          DateTime
+
+  @@index([review])
+  @@index([questionId, review])
+  @@map("review_log")
+}
+
+model FsrsParams {
+  id               String   @id @default("singleton")
+  w                String
+  requestRetention Float    @default(0.9)
+  updatedAt        DateTime @updatedAt
+
+  @@map("fsrs_params")
+}
+
+model LlmUsageLog {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  taskType         String
+  provider         String
+  model            String
+  promptVersion    String
+  promptTokens     Int
+  completionTokens Int
+  cachedTokens     Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  costUsd          Float
+  latencyMs        Int
+  success          Boolean
+  errorMessage     String?
+  sessionId        String?
+  questionId       String?
+  temperature      Float?
+  seed             Int?
+
+  @@index([createdAt])
+  @@index([taskType, createdAt])
+  @@map("llm_usage_log")
+}
+
+model EloState {
+  id        String   @id @default(cuid())
+  kind      String
+  subjectId String
+  rating    Float    @default(1500)
+  n         Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, subjectId])
+  @@index([kind])
+  @@map("elo_state")
+}
+
+model TopicMastery {
+  topic     String   @id
+  flag      String   @default("Mixed")
+  attempts  Int      @default(0)
+  correct   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("topic_mastery")
+}
+
 model StudySession {
   id             Int      @id @default(autoincrement())
   startedAt      DateTime
   endedAt        DateTime?
+  abandonedAt    DateTime?
   totalQuestions Int      @default(0)
   correctCount   Int      @default(0)
+  mode           String   @default("quick")
+  targetCount    Int      @default(10)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   answerHistory AnswerHistory[]
+  items         StudySessionQuestion[]
 
   @@map("study_sessions")
+}
+
+model StudySessionQuestion {
+  id           String           @id @default(cuid())
+  sessionId    Int
+  session      StudySession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId   Int
+  question     QuestionBankItem @relation(fields: [questionId], references: [id])
+  position     Int
+  shownAt      DateTime?
+  answeredAt   DateTime?
+  rating       String?
+  correct      Boolean?
+  timeTakenSec Int?
+  userChoice   String?
+
+  @@unique([sessionId, position])
+  @@index([sessionId, answeredAt])
+  @@map("study_session_question")
 }
 
 model AnswerHistory {
@@ -128,6 +269,11 @@ model AnswerHistory {
   selectedAnswer String
   isCorrect      Boolean
   answeredAt     DateTime         @default(now())
+  stemSnapshot          String   @default("")
+  choicesSnapshot       String   @default("{}")
+  correctAnswerSnapshot String   @default("")
+  topicSnapshot         String   @default("")
+  difficultySnapshot    String   @default("")
 
   @@index([sessionId])
   @@index([questionId])
@@ -136,9 +282,9 @@ model AnswerHistory {
 }
 
 // ─────────────────────────────────────────────
-//  LISTENING SETS & QUESTIONS
+//  LISTENING SETS & QUESTIONS (legacy — ship data only until V2 UI)
 // ─────────────────────────────────────────────
-model ListeningSet {
+model ListeningSetLegacy {
   id         Int      @id @default(autoincrement())
   title      String
   sourceUrl  String?
@@ -148,15 +294,15 @@ model ListeningSet {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
 
-  questions ListeningQuestion[]
+  questions ListeningQuestionLegacy[]
 
   @@map("listening_sets")
 }
 
-model ListeningQuestion {
-  id            Int          @id @default(autoincrement())
+model ListeningQuestionLegacy {
+  id            Int                @id @default(autoincrement())
   setId         Int
-  set           ListeningSet @relation(fields: [setId], references: [id])
+  set           ListeningSetLegacy @relation(fields: [setId], references: [id])
   questionText  String
   optionA       String
   optionB       String
@@ -164,9 +310,38 @@ model ListeningQuestion {
   optionD       String
   correctAnswer String
   explanation   String?
-  orderNo       Int          @default(0)
+  orderNo       Int                @default(0)
 
   @@map("listening_questions")
+}
+
+// ─────────────────────────────────────────────
+//  LISTENING V2 (stub — future implementation)
+// ─────────────────────────────────────────────
+model ListeningSetV2 {
+  id         String   @id @default(cuid())
+  part       Int // 1 | 2 | 3 | 4
+  audioUrl   String
+  transcript String
+  topic      String?
+  createdAt  DateTime @default(now())
+
+  questions ListeningQuestionV2[]
+
+  @@map("listening_set_v2")
+}
+
+model ListeningQuestionV2 {
+  id             String         @id @default(cuid())
+  setId          String
+  set            ListeningSetV2 @relation(fields: [setId], references: [id], onDelete: Cascade)
+  stem           String
+  choices        String // JSON: {A,B,C,D}
+  answer         String
+  timestampStart Int? // seconds into audio
+
+  @@index([setId])
+  @@map("listening_question_v2")
 }
 
 // ─────────────────────────────────────────────

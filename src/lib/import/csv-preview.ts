@@ -37,7 +37,7 @@ export async function previewCsv(csvText: string): Promise<CsvPreviewResult> {
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
-    trimHeaders: true,
+    transformHeader: (header) => header.trim(),
   });
 
   if (parsed.errors.length > 0) {

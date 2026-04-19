@@ -1,3 +1,4 @@
+import CsvImportSection from "@/app/import/CsvImportSection";
 import { QUESTION_DIFFICULTY_VALUES } from "@/lib/question-fields";
 import { QUESTION_IMPORT_EXAMPLE } from "@/lib/import";
 
@@ -66,7 +67,10 @@ export default function ImportPage({ searchParams }: ImportPageProps) {
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-900 mb-2">Import</h2>
-      <p className="text-gray-500 mb-8">Upload one JSON file to add new rows into QuestionBankItem using a fixed question format.</p>
+      <p className="text-gray-500 mb-8">
+        Upload a JSON array or a CSV with headers to add rows to QuestionBankItem. JSON imports immediately; CSV uses
+        preview-then-commit with validation feedback.
+      </p>
 
       {status && message ? (
         <div className={`mb-6 rounded-xl border px-4 py-4 ${getResultVariantClasses(status)}`}>
@@ -145,6 +149,8 @@ export default function ImportPage({ searchParams }: ImportPageProps) {
             </button>
           </form>
         </section>
+
+        <CsvImportSection />
       </div>
     </div>
   );

@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─────────────────────────────────────────────
+//  USERS
+// ─────────────────────────────────────────────
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String   @default("Keith")
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+//  LEARNING ITEMS
+//  Core knowledge atoms: word / phrase / false_friend
+// ─────────────────────────────────────────────
+model LearningItem {
+  id             Int      @id @default(autoincrement())
+  itemType       String   // word | phrase | false_friend
+  term           String
+  meaning        String?
+  confusionWord  String?  // false_friend: the word it gets confused with
+  confusionMeaning String? // false_friend: confusion word's meaning
+  exampleEn      String?
+  exampleZh      String?
+  topic          String?
+  level          String?  // A | B | C
+  source         String?  // e.g. "checkpoint-1-100"
+  originalResult String?  // 會 | 不會 — initial baseline only
+  isValid        Boolean  @default(true)
+
+  // Dynamic mastery (replaces original result as truth)
+  masteryScore    Float   @default(0.0)
+  reviewCount     Int     @default(0)
+  consecutiveOk   Int     @default(0)
+  nextReview      DateTime?
+  intervalDays    Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questionItems QuestionItem[]
+  reviewQueues  ReviewQueue[]
+
+  @@map("learning_items")
+}
+
+// ─────────────────────────────────────────────
+//  QUESTION ITEMS
+//  Answerable questions shown in browser UI
+// ─────────────────────────────────────────────
+model QuestionItem {
+  id             Int           @id @default(autoincrement())
+  learningItemId Int?
+  learningItem   LearningItem? @relation(fields: [learningItemId], references: [id])
+
+  questionType   String  // vocab|phrase|false_friend|part5|part6|part7|part2|part3|part4
+  promptText     String
+  optionA        String?
+  optionB        String?
+  optionC        String?
+  optionD        String?
+  correctAnswer  String  // A | B | C | D | text
+  explanation    String?
+  topic          String?
+  level          String?  // A | B | C
+  isActive       Boolean @default(true)
+  source         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessionAnswers SessionAnswer[]
+  reviewQueues   ReviewQueue[]
+
+  @@map("question_items")
+}
+
+model QuestionBankItem {
+  id            Int      @id @default(autoincrement())
+  questionText  String   @unique
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String
+  explanation   String?
+  topic         String
+  difficulty    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  answerHistory AnswerHistory[]
+
+  @@index([topic])
+  @@index([difficulty])
+  @@map("questions")
+}
+
+model StudySession {
+  id             Int      @id @default(autoincrement())
+  startedAt      DateTime
+  endedAt        DateTime?
+  totalQuestions Int      @default(0)
+  correctCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  answerHistory AnswerHistory[]
+
+  @@map("study_sessions")
+}
+
+model AnswerHistory {
+  id             Int              @id @default(autoincrement())
+  sessionId      Int
+  session        StudySession     @relation(fields: [sessionId], references: [id])
+  questionId     Int
+  question       QuestionBankItem @relation(fields: [questionId], references: [id])
+  selectedAnswer String
+  isCorrect      Boolean
+  answeredAt     DateTime         @default(now())
+
+  @@index([sessionId])
+  @@index([questionId])
+  @@unique([sessionId, questionId])
+  @@map("answer_history")
+}
+
+// ─────────────────────────────────────────────
+//  LISTENING SETS & QUESTIONS
+// ─────────────────────────────────────────────
+model ListeningSet {
+  id         Int      @id @default(autoincrement())
+  title      String
+  sourceUrl  String?
+  part       Int      // 2 | 3 | 4
+  transcript String?
+  note       String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  questions ListeningQuestion[]
+
+  @@map("listening_sets")
+}
+
+model ListeningQuestion {
+  id            Int          @id @default(autoincrement())
+  setId         Int
+  set           ListeningSet @relation(fields: [setId], references: [id])
+  questionText  String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String
+  explanation   String?
+  orderNo       Int          @default(0)
+
+  @@map("listening_questions")
+}
+
+// ─────────────────────────────────────────────
+//  DAILY SESSIONS
+// ─────────────────────────────────────────────
+model DailySession {
+  id             Int      @id @default(autoincrement())
+  sessionDate    DateTime // date only (stored as datetime, compare by date)
+  dayType        Int      // 1 | 2 | 3 | 4
+  status         String   @default("pending") // pending | in_progress | completed
+  totalQuestions Int      @default(0)
+  correctCount   Int      @default(0)
+  durationMin    Int      @default(45)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  answers SessionAnswer[]
+
+  @@map("daily_sessions")
+}
+
+// ─────────────────────────────────────────────
+//  SESSION ANSWERS
+// ─────────────────────────────────────────────
+model SessionAnswer {
+  id             Int          @id @default(autoincrement())
+  sessionId      Int
+  session        DailySession @relation(fields: [sessionId], references: [id])
+  questionItemId Int
+  questionItem   QuestionItem @relation(fields: [questionItemId], references: [id])
+  userAnswer     String?
+  isCorrect      Boolean
+  errorType      String?      // V|FF|G|S|C|LK|IN|DS|SP|VN
+  timeSpentSec   Int?
+  createdAt      DateTime     @default(now())
+
+  @@map("session_answers")
+}
+
+// ─────────────────────────────────────────────
+//  REVIEW QUEUE
+// ─────────────────────────────────────────────
+model ReviewQueue {
+  id             Int           @id @default(autoincrement())
+  learningItemId Int
+  learningItem   LearningItem  @relation(fields: [learningItemId], references: [id])
+  questionItemId Int?
+  questionItem   QuestionItem? @relation(fields: [questionItemId], references: [id])
+  nextReviewDate DateTime
+  intervalDays   Int           @default(1)
+  easeFactor     Float         @default(2.5)
+  wrongCount     Int           @default(0)
+  lastResult     String?       // correct | wrong
+  active         Boolean       @default(true)
+  updatedAt      DateTime      @updatedAt
+
+  @@map("review_queue")
+}
+
+// ─────────────────────────────────────────────
+//  TOPIC WEIGHTS
+// ─────────────────────────────────────────────
+model TopicWeight {
+  id            Int      @id @default(autoincrement())
+  topic         String   @unique
+  baseWeight    Float    @default(1.0)
+  currentWeight Float    @default(1.0)
+  updatedAt     DateTime @updatedAt
+  reason        String?
+
+  @@map("topic_weights")
+}
+
+// ─────────────────────────────────────────────
+//  WEEKLY REPORTS
+// ─────────────────────────────────────────────
+model WeeklyReport {
+  id                Int      @id @default(autoincrement())
+  weekNo            Int      @unique
+  weekStart         DateTime
+  weekEnd           DateTime
+  totalQuestions    Int      @default(0)
+  totalAccuracy     Float?
+  readingAccuracy   Float?
+  listeningAccuracy Float?
+  weakestTopics     String?  // JSON array string
+  weakestErrorTypes String?  // JSON array string
+  nextWeekFocus     String?
+  programPhase      Int      @default(1)
+  createdAt         DateTime @default(now())
+
+  @@map("weekly_reports")
+}
+
+// ─────────────────────────────────────────────
+//  SCORE HISTORY
+// ─────────────────────────────────────────────
+model ScoreHistory {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  testType  String   @default("mock") // official | mock
+  listening Int
+  reading   Int
+  total     Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@map("score_history")
+}

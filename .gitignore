@@ -1,0 +1,21 @@
+node_modules
+# Keep environment variables out of version control
+.env
+.env*.local
+
+# Next.js build output
+.next/
+
+# Database files
+*.db
+
+# Backups
+backups/
+
+# Background study notes (personal)
+Background/
+
+# Prompt handbook (personal reference, not source code)
+Prompt
+
+/generated/prisma

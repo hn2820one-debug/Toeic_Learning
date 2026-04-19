@@ -7,10 +7,15 @@
     "build": "next build",
     "start": "next start",
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-db.ps1",
+    "backfill:answer-history-snapshots": "tsx scripts/backfill-answer-history-snapshots.ts",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "elo:decay": "node --conditions=react-server --import tsx scripts/elo-decay.ts",
+    "seed:fsrs": "tsx scripts/seed-fsrs-from-checkpoint.ts",
+    "test:fsrs": "node --conditions=react-server --import tsx scripts/test-fsrs.ts",
+    "test:llm-env": "tsx scripts/test-llm-env.ts"
   },
   "keywords": [],
   "author": "",
@@ -29,12 +34,19 @@
     "dotenv": "^17.4.2",
     "lucide-react": "^1.8.0",
     "next": "^14.2.35",
+    "papaparse": "^5.5.3",
     "postcss": "^8.5.10",
     "prisma": "^7.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "server-only": "^0.0.1",
     "tailwindcss": "^4.2.2",
+    "ts-fsrs": "^5.3.2",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2"
   }
 }

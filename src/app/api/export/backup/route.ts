@@ -10,6 +10,7 @@ function serializeDates<T>(rows: T[]): T[] {
 }
 
 export async function GET(request: Request) {
+  try {
   const denied = assertExportAllowed(request);
   if (denied) {
     return denied;
@@ -106,4 +107,12 @@ export async function GET(request: Request) {
       "Content-Disposition": `attachment; filename="backup-${new Date().toISOString().slice(0, 10)}.json"`,
     },
   });
+  } catch (error) {
+    console.error("[api/export/backup]", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { error: "Backup export failed", detail: message },
+      { status: 500 },
+    );
+  }
 }

@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { deleteQuestionAction, updateQuestionAction } from "@/app/questions/[id]/edit/actions";
+import AppCard from "@/components/ui/AppCard";
+import BilingualHeading from "@/components/ui/BilingualHeading";
+import { formInputClass, formTextareaClass, primaryButtonClass, secondaryButtonClass } from "@/lib/ui/form-classes";
 import { isAllowedQuestionDifficulty, normalizeQuestionTopic, QUESTION_DIFFICULTY_VALUES } from "@/lib/question-fields";
 import { getEditableQuestion, parseQuestionEditFeedback } from "@/lib/question-management";
 import { getQuestionFilterOptions } from "@/lib/questions";
@@ -53,15 +56,20 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
     <div>
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <a href="/questions" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-            Back to Question Bank
+          <a href="/questions" className="text-sm font-medium text-primary-600 hover:text-primary-700">
+            ← 返回題庫 · Back to bank
           </a>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900 mb-2">Edit Question</h2>
-          <p className="text-gray-500">Update one QuestionBankItem record from the UI without changing training, history, or report logic.</p>
+          <BilingualHeading
+            titleZh="編輯題目"
+            titleEn="Edit question"
+            descriptionZh="更新單筆題庫，不影響既有訓練紀錄邏輯。"
+            descriptionEn="Updates this QuestionBankItem only; training and history rules unchanged."
+            className="!mb-0 mt-3"
+          />
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-          Question #{question.id}
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+          題目 #{question.id} · Question
         </div>
       </div>
 
@@ -72,12 +80,12 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
       ) : null}
 
       <div className="space-y-6">
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
+        <AppCard>
           <div className="mb-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 mb-2">Question Details</p>
-            <h3 className="text-xl font-semibold text-gray-900">Single-question management</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Changes update the current QuestionBankItem record only. Existing StudySession and AnswerHistory rows are not rewritten.
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary-600">題目內容 · Details</p>
+            <h2 className="text-xl font-semibold text-slate-900">單題管理 · Single-question edit</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              僅更新此筆題庫；既有 Session / AnswerHistory 不會改寫。Only this row changes; sessions and answers stay as stored.
             </p>
           </div>
 
@@ -85,8 +93,8 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
             <input type="hidden" name="questionId" value={question.id} />
 
             <div>
-              <label htmlFor="questionText" className="block text-sm font-medium text-gray-700 mb-2">
-                Question Text
+              <label htmlFor="questionText" className="mb-2 block text-sm font-medium text-slate-800">
+                題幹 · Question text
               </label>
               <textarea
                 id="questionText"
@@ -94,14 +102,14 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                 defaultValue={question.questionText}
                 rows={4}
                 required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                className={formTextareaClass}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="optionA" className="block text-sm font-medium text-gray-700 mb-2">
-                  Option A
+                <label htmlFor="optionA" className="mb-2 block text-sm font-medium text-slate-800">
+                  選項 A · Option A
                 </label>
                 <input
                   id="optionA"
@@ -109,13 +117,13 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                   type="text"
                   defaultValue={question.optionA}
                   required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  className={formInputClass}
                 />
               </div>
 
               <div>
-                <label htmlFor="optionB" className="block text-sm font-medium text-gray-700 mb-2">
-                  Option B
+                <label htmlFor="optionB" className="mb-2 block text-sm font-medium text-slate-800">
+                  選項 B · Option B
                 </label>
                 <input
                   id="optionB"
@@ -123,13 +131,13 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                   type="text"
                   defaultValue={question.optionB}
                   required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  className={formInputClass}
                 />
               </div>
 
               <div>
-                <label htmlFor="optionC" className="block text-sm font-medium text-gray-700 mb-2">
-                  Option C
+                <label htmlFor="optionC" className="mb-2 block text-sm font-medium text-slate-800">
+                  選項 C · Option C
                 </label>
                 <input
                   id="optionC"
@@ -137,13 +145,13 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                   type="text"
                   defaultValue={question.optionC}
                   required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  className={formInputClass}
                 />
               </div>
 
               <div>
-                <label htmlFor="optionD" className="block text-sm font-medium text-gray-700 mb-2">
-                  Option D
+                <label htmlFor="optionD" className="mb-2 block text-sm font-medium text-slate-800">
+                  選項 D · Option D
                 </label>
                 <input
                   id="optionD"
@@ -151,20 +159,20 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                   type="text"
                   defaultValue={question.optionD}
                   required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  className={formInputClass}
                 />
               </div>
 
               <div>
-                <label htmlFor="correctAnswer" className="block text-sm font-medium text-gray-700 mb-2">
-                  Correct Answer
+                <label htmlFor="correctAnswer" className="mb-2 block text-sm font-medium text-slate-800">
+                  正解 · Correct answer
                 </label>
                 <select
                   id="correctAnswer"
                   name="correctAnswer"
                   defaultValue={question.correctAnswer}
                   required
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  className={formInputClass}
                 >
                   <option value="A">A</option>
                   <option value="B">B</option>
@@ -174,8 +182,8 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
               </div>
 
               <div>
-                <label htmlFor="topic" className="block text-sm font-medium text-gray-700 mb-2">
-                  Topic
+                <label htmlFor="topic" className="mb-2 block text-sm font-medium text-slate-800">
+                  主題 · Topic
                 </label>
                 <input
                   id="topic"
@@ -184,10 +192,12 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                   type="text"
                   defaultValue={topicValue}
                   required
-                  placeholder="Choose or enter a topic"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  placeholder="選擇或輸入 · Choose or type"
+                  className={formInputClass}
                 />
-                <p className="mt-2 text-xs text-gray-500">Existing topic values are suggested here. Surrounding whitespace is trimmed when saved.</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  建議值如下；儲存時修剪空白。Suggestions below; whitespace trimmed on save.
+                </p>
                 <datalist id="question-topic-options">
                   {topics.map((topic) => (
                     <option key={topic} value={topic} />
@@ -196,15 +206,15 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
               </div>
 
               <div>
-                <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-2">
-                  Difficulty
+                <label htmlFor="difficulty" className="mb-2 block text-sm font-medium text-slate-800">
+                  難度 · Difficulty
                 </label>
                 <select
                   id="difficulty"
                   name="difficulty"
                   defaultValue={difficultyValue}
                   required
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                  className={formInputClass}
                 >
                   {hasLegacyDifficulty ? (
                     <option value="" disabled>
@@ -217,48 +227,42 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
                     </option>
                   ))}
                 </select>
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-slate-500">
                   {hasLegacyDifficulty
-                    ? `This record currently uses an older difficulty value (${question.difficulty}) and must be resaved as A, B, or C.`
-                    : "Difficulty is standardized to A, B, or C across create, edit, and import."}
+                    ? `此筆目前為舊難度 (${question.difficulty})，請改存成 A / B / C。Legacy difficulty — resave as A, B, or C.`
+                    : "標準為 A / B / C（與新增、匯入一致）。"}
                 </p>
               </div>
             </div>
 
             <div>
-              <label htmlFor="explanation" className="block text-sm font-medium text-gray-700 mb-2">
-                Explanation
+              <label htmlFor="explanation" className="mb-2 block text-sm font-medium text-slate-800">
+                解析 · Explanation
               </label>
               <textarea
                 id="explanation"
                 name="explanation"
                 defaultValue={question.explanation ?? ""}
                 rows={4}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+                className={formTextareaClass}
               />
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-              >
-                Save Changes
+              <button type="submit" className={primaryButtonClass}>
+                儲存 · Save
               </button>
-              <a
-                href="/questions"
-                className="inline-flex items-center rounded-lg bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-              >
-                Cancel
+              <a href="/questions" className={secondaryButtonClass}>
+                取消 · Cancel
               </a>
             </div>
           </form>
-        </section>
+        </AppCard>
 
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
+        <AppCard>
           <div className="mb-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 mb-2">Delete Safety</p>
-            <h3 className="text-xl font-semibold text-gray-900">Safe single-question delete</h3>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-600">刪除安全 · Delete safety</p>
+            <h2 className="text-xl font-semibold text-slate-900">單題刪除（有條件）· Safe delete</h2>
           </div>
 
           {question.canDelete ? (
@@ -300,12 +304,12 @@ export default async function QuestionEditPage({ params, searchParams }: Questio
               </div>
             )
           ) : (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-              Delete is disabled because this question is already referenced by {question.answerHistoryCount} answer record
-              {question.answerHistoryCount === 1 ? "" : "s"}. The row is kept to preserve training history.
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+              已有 {question.answerHistoryCount} 筆答題紀錄引用此題，禁止刪除以保留訓練歷史。Delete disabled: referenced by{" "}
+              {question.answerHistoryCount} answer record(s).
             </div>
           )}
-        </section>
+        </AppCard>
       </div>
     </div>
   );

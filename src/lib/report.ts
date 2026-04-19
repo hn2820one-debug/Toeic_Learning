@@ -65,6 +65,7 @@ export async function getWeeklyReportData(now = new Date()): Promise<WeeklyRepor
       answerHistory: {
         select: {
           isCorrect: true,
+          topicSnapshot: true,
           question: {
             select: {
               topic: true,
@@ -100,11 +101,12 @@ export async function getWeeklyReportData(now = new Date()): Promise<WeeklyRepor
 
   for (const session of sessions) {
     for (const answer of session.answerHistory) {
-      const current = topicMap.get(answer.question.topic) ?? { totalAnswered: 0, correctCount: 0 };
+      const topic = answer.topicSnapshot || answer.question.topic;
+      const current = topicMap.get(topic) ?? { totalAnswered: 0, correctCount: 0 };
 
       current.totalAnswered += 1;
       current.correctCount += answer.isCorrect ? 1 : 0;
-      topicMap.set(answer.question.topic, current);
+      topicMap.set(topic, current);
     }
   }
 

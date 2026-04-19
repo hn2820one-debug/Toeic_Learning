@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { parseQuestionNotes } from "@/lib/question-taxonomy";
 
 const MAX_GRAMMAR_POINTS = 31;
 const RECENT_PER_POINT = 20;
@@ -6,7 +7,16 @@ const UNTAGGED_LABEL = "Untagged";
 
 function normalizeGrammarPoint(notes: string | null) {
   const t = (notes ?? "").trim();
-  return t.length > 0 ? t : UNTAGGED_LABEL;
+  if (t.length === 0) {
+    return UNTAGGED_LABEL;
+  }
+
+  const parsed = parseQuestionNotes(t);
+  if (!parsed) {
+    return t;
+  }
+
+  return parsed.category === "Grammar" ? parsed.subFocusLabel : "";
 }
 
 function accuracyStatusClasses(accuracy: number | null) {
@@ -39,6 +49,9 @@ export default async function GrammarMasteryGrid() {
 
   for (const row of history) {
     const point = normalizeGrammarPoint(row.question.notes);
+    if (!point) {
+      continue;
+    }
     let bucket = recentByPoint.get(point);
     if (!bucket) {
       bucket = [];
@@ -55,9 +68,8 @@ export default async function GrammarMasteryGrid() {
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <h3 className="font-semibold text-gray-900 mb-1">Grammar mastery</h3>
       <p className="text-sm text-gray-500 mb-4">
-        Accuracy from up to {RECENT_PER_POINT} most recent answers per grammar label (question{" "}
-        <code className="text-xs bg-gray-100 px-1 rounded">notes</code>). Empty notes count as &quot;{UNTAGGED_LABEL}
-        &quot;.
+        Accuracy from up to {RECENT_PER_POINT} most recent answers per grammar label in question{" "}
+        <code className="text-xs bg-gray-100 px-1 rounded">notes</code>. Non-grammar categories are ignored.
       </p>
       {labels.length === 0 ? (
         <p className="text-gray-400 text-sm">No answer history yet.</p>

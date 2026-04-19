@@ -54,6 +54,10 @@ export async function getCompletedStudySessions(): Promise<HistorySession[]> {
           selectedAnswer: true,
           isCorrect: true,
           answeredAt: true,
+          stemSnapshot: true,
+          correctAnswerSnapshot: true,
+          topicSnapshot: true,
+          difficultySnapshot: true,
           question: {
             select: {
               questionText: true,
@@ -80,13 +84,13 @@ export async function getCompletedStudySessions(): Promise<HistorySession[]> {
       answers: session.answerHistory.map((answer) => ({
         id: answer.id,
         questionId: answer.questionId,
-        questionText: answer.question.questionText,
+        questionText: answer.stemSnapshot || answer.question.questionText,
         selectedAnswer: answer.selectedAnswer,
-        correctAnswer: answer.question.correctAnswer,
+        correctAnswer: answer.correctAnswerSnapshot || answer.question.correctAnswer,
         isCorrect: answer.isCorrect,
         answeredAt: answer.answeredAt,
-        topic: answer.question.topic,
-        difficulty: answer.question.difficulty,
+        topic: answer.topicSnapshot || answer.question.topic,
+        difficulty: answer.difficultySnapshot || answer.question.difficulty,
       })),
     };
   });

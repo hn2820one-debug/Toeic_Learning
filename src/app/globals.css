@@ -1,9 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
+  --color-primary-50: #eef4ff;
+  --color-primary-100: #dbe7ff;
+  --color-primary-200: #bdd1ff;
+  --color-primary-300: #93b4ff;
+  --color-primary-400: #5e8cff;
+  --color-primary-500: #3b6df0;
+  --color-primary-600: #2b56d6;
+  --color-primary-700: #2245ae;
+  --color-primary-800: #1d3987;
+  --color-primary-900: #18306e;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  font-feature-settings: "cv11", "ss01";
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei",
+    "PingFang TC", "Noto Sans TC", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #0f172a;
+}
+
+/* Slightly stronger default for headings; pages can still override. */
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Selection: warm accent for visibility. */
+::selection {
+  background: #c7d6ff;
+  color: #18306e;
 }

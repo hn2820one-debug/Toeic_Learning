@@ -1,12 +1,31 @@
 import type { Prisma } from "../../generated/prisma";
 
-import { prisma } from "@/lib/prisma";
+import { updateElo } from "./elo";
+import {
+  applyRating,
+  previewIntervals,
+  Rating,
+  type IntervalPreview,
+  type RatingName as FsrsRatingName,
+  type SchedulerRating,
+} from "./fsrs";
+import { prisma } from "./prisma";
+import { composeSession } from "./session-composer";
 
 type SearchParamValue = string | string[] | undefined;
 
 const VALID_ANSWER_CHOICES = ["A", "B", "C", "D"] as const;
+const VALID_RATING_NAMES = ["Again", "Hard", "Good", "Easy"] as const;
+const RATING_VALUE_MAP: Record<FsrsRatingName, SchedulerRating> = {
+  Again: Rating.Again,
+  Hard: Rating.Hard,
+  Good: Rating.Good,
+  Easy: Rating.Easy,
+};
 
 export const TRAINING_QUESTION_LIMIT = 5;
+export const ACTIVE_SESSION_COOKIE_NAME = "activeSessionId";
+export const ACTIVE_SESSION_COOKIE_MAX_AGE_SECONDS = 2 * 24 * 60 * 60;
 
 export type AnswerChoice = (typeof VALID_ANSWER_CHOICES)[number];
 
@@ -18,7 +37,6 @@ export type TrainingNotice =
 
 export type TrainingPageSearchParams = {
   session?: SearchParamValue;
-  ids?: SearchParamValue;
   notice?: SearchParamValue;
 };
 
@@ -49,6 +67,12 @@ type TrainingPageStateBase = {
   noticeMessage: string | null;
 };
 
+export type ActiveSessionBannerState = {
+  sessionId: number;
+  answeredCount: number;
+  targetCount: number;
+};
+
 export type TrainingPageState =
   | (TrainingPageStateBase & { status: "empty" })
   | (TrainingPageStateBase & { status: "idle" })
@@ -56,31 +80,47 @@ export type TrainingPageState =
   | (TrainingPageStateBase & {
       status: "active";
       sessionId: number;
-      questionIds: number[];
-      questionIdsParam: string;
+      sessionQuestionId: string;
       questionNumber: number;
       totalQuestions: number;
       question: TrainingQuestion;
     })
   | (TrainingPageStateBase & {
+      status: "reveal";
+      sessionId: number;
+      sessionQuestionId: string;
+      questionNumber: number;
+      totalQuestions: number;
+      question: TrainingQuestion;
+      userChoice: AnswerChoice;
+      isCorrect: boolean;
+      timeTakenSec: number | null;
+      intervalPreviews: Record<FsrsRatingName, IntervalPreview>;
+    })
+  | (TrainingPageStateBase & {
       status: "completed";
       session: TrainingSessionSummary;
-      questionIds: number[];
-      questionIdsParam: string;
     });
 
-export type SubmitTrainingAnswerInput = {
+export type SubmitTrainingChoiceInput = {
   sessionId: string | null;
+  sessionQuestionId: string | null;
   questionId: string | null;
-  questionIds: string | null;
   selectedAnswer: string | null;
+};
+
+export type SubmitTrainingAnswerInput = {
+  sessionQuestionId: string | null;
+  userChoice: string | null;
+  rating: string | null;
+  timeTakenSec: string | null;
 };
 
 export type SubmitTrainingAnswerResult = {
   ok: boolean;
   sessionId?: number;
-  questionIds: number[];
   notice?: TrainingNotice;
+  sessionCompleted?: boolean;
 };
 
 function normalizeParam(value: SearchParamValue) {
@@ -111,15 +151,45 @@ function normalizeAnswerChoice(value: string | null) {
   return VALID_ANSWER_CHOICES.includes(normalized) ? normalized : undefined;
 }
 
-function shuffleArray<T>(items: T[]) {
-  const shuffled = [...items];
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+function normalizeFsrsRating(value: string | null) {
+  if (!value) {
+    return undefined;
   }
 
-  return shuffled;
+  const normalized = value.trim() as FsrsRatingName;
+  return VALID_RATING_NAMES.includes(normalized) ? normalized : undefined;
+}
+
+function normalizeSessionQuestionId(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseNonNegativeInt(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function serializeChoicesSnapshot(question: {
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+}) {
+  return JSON.stringify({
+    A: question.optionA,
+    B: question.optionB,
+    C: question.optionC,
+    D: question.optionD,
+  });
 }
 
 function getAccuracy(correctCount: number, totalQuestions: number) {
@@ -130,38 +200,14 @@ function getAccuracy(correctCount: number, totalQuestions: number) {
   return Math.round((correctCount / totalQuestions) * 100);
 }
 
-export function parseQuestionIds(rawValue: string | undefined) {
-  if (!rawValue) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      rawValue
-        .split(",")
-        .map((value) => Number.parseInt(value, 10))
-        .filter((value) => Number.isInteger(value) && value > 0),
-    ),
-  ).slice(0, TRAINING_QUESTION_LIMIT);
-}
-
-export function serializeQuestionIds(questionIds: number[]) {
-  return questionIds.join(",");
-}
-
 export function getTrainingHref(options?: {
   sessionId?: number;
-  questionIds?: number[];
   notice?: TrainingNotice;
 }) {
   const searchParams = new URLSearchParams();
 
   if (options?.sessionId) {
     searchParams.set("session", String(options.sessionId));
-  }
-
-  if (options?.questionIds && options.questionIds.length > 0) {
-    searchParams.set("ids", serializeQuestionIds(options.questionIds));
   }
 
   if (options?.notice) {
@@ -187,18 +233,62 @@ export function getTrainingNoticeMessage(notice?: string) {
   }
 }
 
-export async function pickTrainingQuestionIds(limit = TRAINING_QUESTION_LIMIT) {
-  const records = await prisma.questionBankItem.findMany({
-    select: { id: true },
-  });
+export async function getActiveSessionBannerState(sessionIdValue: string | undefined): Promise<ActiveSessionBannerState | null> {
+  const sessionId = parsePositiveInt(sessionIdValue);
 
-  return shuffleArray(records.map(({ id }) => id)).slice(0, limit);
+  if (!sessionId) {
+    return null;
+  }
+
+  const [session, answeredCount] = await Promise.all([
+    prisma.studySession.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        endedAt: true,
+        abandonedAt: true,
+        targetCount: true,
+        totalQuestions: true,
+      },
+    }),
+    prisma.studySessionQuestion.count({
+      where: {
+        sessionId,
+        answeredAt: { not: null },
+      },
+    }),
+  ]);
+
+  if (!session || session.endedAt || session.abandonedAt) {
+    return null;
+  }
+
+  const targetCount = session.targetCount > 0 ? session.targetCount : session.totalQuestions;
+
+  return {
+    sessionId: session.id,
+    answeredCount,
+    targetCount,
+  };
 }
 
-export async function createStudySession() {
+export async function pickTrainingQuestionIds(limit = TRAINING_QUESTION_LIMIT) {
+  return composeSession(limit);
+}
+
+export async function createStudySession(questionIds: number[]) {
   return prisma.studySession.create({
     data: {
       startedAt: new Date(),
+      mode: "quick",
+      targetCount: questionIds.length,
+      totalQuestions: questionIds.length,
+      items: {
+        create: questionIds.map((questionId, index) => ({
+          questionId,
+          position: index + 1,
+        })),
+      },
     },
     select: { id: true },
   });
@@ -218,9 +308,8 @@ export async function getTrainingPageState(searchParams?: TrainingPageSearchPara
   }
 
   const sessionId = parsePositiveInt(normalizeParam(searchParams?.session));
-  const questionIds = parseQuestionIds(normalizeParam(searchParams?.ids));
 
-  if (!sessionId && questionIds.length === 0) {
+  if (!sessionId) {
     return {
       status: "idle",
       availableQuestionCount,
@@ -228,44 +317,55 @@ export async function getTrainingPageState(searchParams?: TrainingPageSearchPara
     };
   }
 
-  if (!sessionId || questionIds.length === 0) {
-    return {
-      status: "invalid",
-      availableQuestionCount,
-      noticeMessage,
-      reason: "The training link is incomplete.",
-    };
-  }
-
-  const [session, answers, questions] = await Promise.all([
+  const [session, totalQuestions, answeredCount, nextItem] = await Promise.all([
     prisma.studySession.findUnique({
       where: { id: sessionId },
       select: {
         id: true,
         startedAt: true,
         endedAt: true,
+        abandonedAt: true,
         totalQuestions: true,
+        targetCount: true,
         correctCount: true,
       },
     }),
-    prisma.answerHistory.findMany({
+    prisma.studySessionQuestion.count({
       where: { sessionId },
-      select: { questionId: true },
-      orderBy: { answeredAt: "asc" },
     }),
-    prisma.questionBankItem.findMany({
-      where: { id: { in: questionIds } },
+    prisma.studySessionQuestion.count({
+      where: {
+        sessionId,
+        answeredAt: { not: null },
+      },
+    }),
+    prisma.studySessionQuestion.findFirst({
+      where: {
+        sessionId,
+        answeredAt: null,
+      },
+      orderBy: { position: "asc" },
       select: {
         id: true,
-        questionText: true,
-        optionA: true,
-        optionB: true,
-        optionC: true,
-        optionD: true,
-        correctAnswer: true,
-        explanation: true,
-        topic: true,
-        difficulty: true,
+        position: true,
+        shownAt: true,
+        userChoice: true,
+        correct: true,
+        timeTakenSec: true,
+        question: {
+          select: {
+            id: true,
+            questionText: true,
+            optionA: true,
+            optionB: true,
+            optionC: true,
+            optionD: true,
+            correctAnswer: true,
+            explanation: true,
+            topic: true,
+            difficulty: true,
+          },
+        },
       },
     }),
   ]);
@@ -279,42 +379,44 @@ export async function getTrainingPageState(searchParams?: TrainingPageSearchPara
     };
   }
 
-  const questionMap = new Map(questions.map((question) => [question.id, question]));
-  if (questionMap.size !== questionIds.length) {
+  if (session.abandonedAt) {
     return {
       status: "invalid",
       availableQuestionCount,
       noticeMessage,
-      reason: "One or more questions from this session are no longer available.",
+      reason: "This training session was abandoned.",
     };
   }
 
-  const answeredQuestionIds = new Set(answers.map((answer) => answer.questionId));
-  const answeredCount = answers.length;
-  const totalQuestions = questionIds.length;
+  if (totalQuestions === 0) {
+    return {
+      status: "invalid",
+      availableQuestionCount,
+      noticeMessage,
+      reason: "This training session does not have any queued questions.",
+    };
+  }
 
   if (session.endedAt || answeredCount >= totalQuestions) {
     return {
       status: "completed",
       availableQuestionCount,
       noticeMessage,
-      questionIds,
-      questionIdsParam: serializeQuestionIds(questionIds),
       session: {
         id: session.id,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
-        totalQuestions,
+        totalQuestions: session.totalQuestions > 0 ? session.totalQuestions : session.targetCount > 0 ? session.targetCount : totalQuestions,
         correctCount: session.correctCount,
-        accuracy: getAccuracy(session.correctCount, totalQuestions),
+        accuracy: getAccuracy(
+          session.correctCount,
+          session.totalQuestions > 0 ? session.totalQuestions : session.targetCount > 0 ? session.targetCount : totalQuestions,
+        ),
       },
     };
   }
 
-  const nextQuestionId = questionIds.find((questionId) => !answeredQuestionIds.has(questionId));
-  const question = nextQuestionId ? questionMap.get(nextQuestionId) : undefined;
-
-  if (!question) {
+  if (!nextItem) {
     return {
       status: "invalid",
       availableQuestionCount,
@@ -323,29 +425,53 @@ export async function getTrainingPageState(searchParams?: TrainingPageSearchPara
     };
   }
 
+  if (nextItem.userChoice) {
+    const intervalPreviews = await previewIntervals(nextItem.question.id);
+
+    return {
+      status: "reveal",
+      availableQuestionCount,
+      noticeMessage,
+      sessionId: session.id,
+      sessionQuestionId: nextItem.id,
+      questionNumber: nextItem.position,
+      totalQuestions,
+      question: nextItem.question,
+      userChoice: nextItem.userChoice as AnswerChoice,
+      isCorrect: nextItem.correct ?? nextItem.question.correctAnswer === nextItem.userChoice,
+      timeTakenSec: nextItem.timeTakenSec ?? null,
+      intervalPreviews,
+    };
+  }
+
+  if (!nextItem.shownAt) {
+    await prisma.studySessionQuestion.update({
+      where: { id: nextItem.id },
+      data: { shownAt: new Date() },
+    });
+  }
+
   return {
     status: "active",
     availableQuestionCount,
     noticeMessage,
     sessionId: session.id,
-    questionIds,
-    questionIdsParam: serializeQuestionIds(questionIds),
-    questionNumber: answeredCount + 1,
+    sessionQuestionId: nextItem.id,
+    questionNumber: nextItem.position,
     totalQuestions,
-    question,
+    question: nextItem.question,
   };
 }
 
-export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Promise<SubmitTrainingAnswerResult> {
+export async function recordTrainingAnswerChoice(input: SubmitTrainingChoiceInput): Promise<SubmitTrainingAnswerResult> {
   const sessionId = parsePositiveInt(input.sessionId ?? undefined);
+  const sessionQuestionId = normalizeSessionQuestionId(input.sessionQuestionId);
   const questionId = parsePositiveInt(input.questionId ?? undefined);
-  const questionIds = parseQuestionIds(input.questionIds ?? undefined);
   const selectedAnswer = normalizeAnswerChoice(input.selectedAnswer);
 
-  if (!sessionId || questionIds.length === 0) {
+  if (!sessionId || !sessionQuestionId) {
     return {
       ok: false,
-      questionIds,
       notice: "invalid-session",
     };
   }
@@ -354,7 +480,6 @@ export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Pr
     return {
       ok: false,
       sessionId,
-      questionIds,
       notice: "invalid-question",
     };
   }
@@ -363,78 +488,212 @@ export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Pr
     return {
       ok: false,
       sessionId,
-      questionIds,
       notice: "invalid-answer",
     };
   }
 
-  if (!questionIds.includes(questionId)) {
-    return {
-      ok: false,
-      sessionId,
-      questionIds,
-      notice: "invalid-question",
-    };
-  }
-
-  const [session, answers, question] = await Promise.all([
+  const [session, nextItem] = await Promise.all([
     prisma.studySession.findUnique({
       where: { id: sessionId },
-      select: { id: true, endedAt: true },
+      select: { id: true, endedAt: true, abandonedAt: true },
     }),
-    prisma.answerHistory.findMany({
-      where: { sessionId },
-      select: { questionId: true },
-      orderBy: { answeredAt: "asc" },
-    }),
-    prisma.questionBankItem.findUnique({
-      where: { id: questionId },
-      select: { id: true, correctAnswer: true },
+    prisma.studySessionQuestion.findFirst({
+      where: {
+        sessionId,
+        answeredAt: null,
+      },
+      orderBy: { position: "asc" },
+      select: {
+        id: true,
+        questionId: true,
+        shownAt: true,
+        userChoice: true,
+        question: {
+          select: {
+            id: true,
+            questionText: true,
+            optionA: true,
+            optionB: true,
+            optionC: true,
+            optionD: true,
+            correctAnswer: true,
+            topic: true,
+            difficulty: true,
+          },
+        },
+      },
     }),
   ]);
 
-  if (!session || session.endedAt) {
+  if (!session || session.endedAt || session.abandonedAt) {
     return {
       ok: false,
       sessionId,
-      questionIds,
       notice: "invalid-session",
     };
   }
 
-  if (!question) {
+  if (!nextItem) {
     return {
       ok: false,
       sessionId,
-      questionIds,
       notice: "invalid-question",
     };
   }
 
-  const answeredQuestionIds = new Set(answers.map((answer) => answer.questionId));
-  const nextQuestionId = questionIds.find((id) => !answeredQuestionIds.has(id));
-
-  if (answeredQuestionIds.has(questionId) || nextQuestionId !== questionId) {
+  if (nextItem.id !== sessionQuestionId || nextItem.questionId !== questionId || nextItem.userChoice) {
     return {
       ok: false,
       sessionId,
-      questionIds,
       notice: "invalid-question",
     };
   }
 
-  const isCorrect = question.correctAnswer === selectedAnswer;
-  const isLastQuestion = answers.length + 1 >= questionIds.length;
+  const isCorrect = nextItem.question.correctAnswer === selectedAnswer;
   const now = new Date();
+  const timeTakenSec = nextItem.shownAt
+    ? Math.max(0, Math.round((now.getTime() - nextItem.shownAt.getTime()) / 1000))
+    : null;
+
+  try {
+    await prisma.studySessionQuestion.update({
+      where: { id: nextItem.id },
+      data: {
+        correct: isCorrect,
+        userChoice: selectedAnswer,
+        timeTakenSec,
+      },
+    });
+  } catch {
+    return {
+      ok: false,
+      sessionId,
+      notice: "invalid-question",
+    };
+  }
+
+  return {
+    ok: true,
+    sessionId,
+  };
+}
+
+export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Promise<SubmitTrainingAnswerResult> {
+  const sessionQuestionId = normalizeSessionQuestionId(input.sessionQuestionId);
+  const userChoice = normalizeAnswerChoice(input.userChoice);
+  const rating = normalizeFsrsRating(input.rating);
+  const timeTakenSecInput = parseNonNegativeInt(input.timeTakenSec);
+
+  if (!sessionQuestionId || !userChoice || !rating) {
+    return {
+      ok: false,
+      notice: "invalid-question",
+    };
+  }
+
+  const sessionItem = await prisma.studySessionQuestion.findUnique({
+    where: { id: sessionQuestionId },
+    select: {
+      id: true,
+      sessionId: true,
+      questionId: true,
+      shownAt: true,
+      answeredAt: true,
+      userChoice: true,
+      correct: true,
+      timeTakenSec: true,
+      position: true,
+      session: {
+        select: {
+          id: true,
+          endedAt: true,
+          abandonedAt: true,
+        },
+      },
+      question: {
+        select: {
+          id: true,
+          questionText: true,
+          optionA: true,
+          optionB: true,
+          optionC: true,
+          optionD: true,
+          correctAnswer: true,
+          topic: true,
+          difficulty: true,
+          explanation: true,
+        },
+      },
+    },
+  });
+
+  if (!sessionItem || !sessionItem.session || sessionItem.session.endedAt || sessionItem.session.abandonedAt) {
+    return {
+      ok: false,
+      notice: "invalid-session",
+    };
+  }
+
+  const nextPendingItem = await prisma.studySessionQuestion.findFirst({
+    where: {
+      sessionId: sessionItem.sessionId,
+      answeredAt: null,
+    },
+    orderBy: { position: "asc" },
+    select: { id: true },
+  });
+  const unansweredCount = await prisma.studySessionQuestion.count({
+    where: {
+      sessionId: sessionItem.sessionId,
+      answeredAt: null,
+    },
+  });
+
+  if (
+    !nextPendingItem ||
+    nextPendingItem.id !== sessionQuestionId ||
+    sessionItem.answeredAt ||
+    sessionItem.userChoice !== userChoice
+  ) {
+    return {
+      ok: false,
+      sessionId: sessionItem.sessionId,
+      notice: "invalid-question",
+    };
+  }
+
+  const isCorrect = sessionItem.correct ?? sessionItem.question.correctAnswer === userChoice;
+  const isLastQuestion = unansweredCount <= 1;
+  const now = new Date();
+  const timeTakenSec =
+    timeTakenSecInput ??
+    sessionItem.timeTakenSec ??
+    (sessionItem.shownAt ? Math.max(0, Math.round((now.getTime() - sessionItem.shownAt.getTime()) / 1000)) : null);
 
   try {
     await prisma.$transaction(async (transaction) => {
       await transaction.answerHistory.create({
         data: {
-          sessionId,
-          questionId,
-          selectedAnswer,
+          sessionId: sessionItem.sessionId,
+          questionId: sessionItem.questionId,
+          selectedAnswer: userChoice,
           isCorrect,
+          stemSnapshot: sessionItem.question.questionText,
+          choicesSnapshot: serializeChoicesSnapshot(sessionItem.question),
+          correctAnswerSnapshot: sessionItem.question.correctAnswer,
+          topicSnapshot: sessionItem.question.topic,
+          difficultySnapshot: sessionItem.question.difficulty,
+        },
+      });
+
+      await transaction.studySessionQuestion.update({
+        where: { id: sessionItem.id },
+        data: {
+          answeredAt: now,
+          rating,
+          correct: isCorrect,
+          userChoice,
+          timeTakenSec,
         },
       });
 
@@ -443,28 +702,68 @@ export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Pr
         ...(isLastQuestion
           ? {
               endedAt: now,
-              totalQuestions: questionIds.length,
             }
           : {}),
       };
 
       await transaction.studySession.update({
-        where: { id: sessionId },
+        where: { id: sessionItem.sessionId },
         data: updateData,
       });
     });
   } catch {
     return {
       ok: false,
-      sessionId,
-      questionIds,
+      sessionId: sessionItem.sessionId,
       notice: "invalid-question",
     };
   }
 
+  try {
+    await applyRating(sessionItem.questionId, RATING_VALUE_MAP[rating]);
+  } catch (error) {
+    console.error("FSRS applyRating failed:", error);
+  }
+
+  try {
+    await updateElo(sessionItem.questionId, sessionItem.question.topic, sessionItem.question.difficulty, isCorrect);
+  } catch (error) {
+    console.error("ELO update failed:", error);
+  }
+
   return {
     ok: true,
-    sessionId,
-    questionIds,
+    sessionId: sessionItem.sessionId,
+    sessionCompleted: isLastQuestion,
   };
+}
+
+export async function abandonStudySession(sessionIdValue: string | null | undefined) {
+  const sessionId = parsePositiveInt(sessionIdValue ?? undefined);
+
+  if (!sessionId) {
+    return false;
+  }
+
+  const session = await prisma.studySession.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      endedAt: true,
+      abandonedAt: true,
+    },
+  });
+
+  if (!session || session.endedAt || session.abandonedAt) {
+    return false;
+  }
+
+  await prisma.studySession.update({
+    where: { id: sessionId },
+    data: {
+      abandonedAt: new Date(),
+    },
+  });
+
+  return true;
 }

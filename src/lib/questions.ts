@@ -61,9 +61,23 @@ export async function getQuestions(filters: QuestionFilters) {
     ...(filters.difficulty ? { difficulty: filters.difficulty } : {}),
     ...(filters.query
       ? {
-          questionText: {
-            contains: filters.query,
-          },
+          OR: [
+            {
+              questionText: {
+                contains: filters.query,
+              },
+            },
+            {
+              topic: {
+                contains: filters.query,
+              },
+            },
+            {
+              notes: {
+                contains: filters.query,
+              },
+            },
+          ],
         }
       : {}),
   };

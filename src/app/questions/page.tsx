@@ -1,3 +1,7 @@
+import AppCard from "@/components/ui/AppCard";
+import BilingualHeading from "@/components/ui/BilingualHeading";
+import { parseQuestionNotes } from "@/lib/question-taxonomy";
+import { formInputClass, primaryButtonClass, secondaryButtonClass } from "@/lib/ui/form-classes";
 import {
   getQuestionFilterOptions,
   getQuestions,
@@ -54,16 +58,16 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   return (
     <div>
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Question Bank</h2>
-          <p className="text-gray-500">Browse TOEIC-style multiple-choice questions from the local database.</p>
-        </div>
+        <BilingualHeading
+          titleZh="題庫"
+          titleEn="Question Bank"
+          descriptionZh="瀏覽、篩選本機多選題；可從此新增或管理單題。"
+          descriptionEn="Browse and filter TOEIC-style MCQs from the local database."
+          className="!mb-0 md:flex-1"
+        />
 
-        <a
-          href="/questions/new"
-          className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          New Question
+        <a href="/questions/new" className={`${primaryButtonClass} shrink-0 px-4`}>
+          新增題目 · New
         </a>
       </div>
 
@@ -73,32 +77,35 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         </div>
       ) : null}
 
-      <form action="/questions" className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+      <form
+        action="/questions"
+        className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm md:grid-cols-4"
+      >
         <div className="md:col-span-2">
-          <label htmlFor="q" className="block text-sm font-medium text-gray-700 mb-1">
-            Search Question Text
+          <label htmlFor="q" className="mb-1 block text-sm font-medium text-slate-800">
+            搜尋題幹 · Search text
           </label>
           <input
             id="q"
             name="q"
             type="search"
             defaultValue={filters.query ?? ""}
-            placeholder="Search by keyword"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+            placeholder="題幹 / topic / classification"
+            className={formInputClass}
           />
         </div>
 
         <div>
-          <label htmlFor="topic" className="block text-sm font-medium text-gray-700 mb-1">
-            Topic
+          <label htmlFor="topic" className="mb-1 block text-sm font-medium text-slate-800">
+            主題 · Topic
           </label>
           <select
             id="topic"
             name="topic"
             defaultValue={filters.topic ?? ""}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+            className={formInputClass}
           >
-            <option value="">All topics</option>
+            <option value="">全部 · All</option>
             {topics.map((topic) => (
               <option key={topic} value={topic}>
                 {topic}
@@ -108,16 +115,16 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         </div>
 
         <div>
-          <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-1">
-            Difficulty
+          <label htmlFor="difficulty" className="mb-1 block text-sm font-medium text-slate-800">
+            難度 · Difficulty
           </label>
           <select
             id="difficulty"
             name="difficulty"
             defaultValue={filters.difficulty ?? ""}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+            className={formInputClass}
           >
-            <option value="">All levels</option>
+            <option value="">全部 · All</option>
             {difficulties.map((difficulty) => (
               <option key={difficulty} value={difficulty}>
                 {difficulty}
@@ -126,40 +133,35 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
           </select>
         </div>
 
-        <div className="md:col-span-4 flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            Apply Filters
+        <div className="flex flex-wrap items-center gap-3 md:col-span-4">
+          <button type="submit" className={`${primaryButtonClass} px-4`}>
+            套用 · Apply
           </button>
-          <a
-            href="/questions"
-            className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-          >
-            Reset
+          <a href="/questions" className={`${secondaryButtonClass} px-4`}>
+            重設 · Reset
           </a>
-          <p className="text-sm text-gray-500">
-            {questions.length} question{questions.length === 1 ? "" : "s"} found
+          <p className="text-sm text-slate-600">
+            {questions.length} 題 · {questions.length === 1 ? "question" : "questions"} found
           </p>
         </div>
       </form>
 
       {questions.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-500">
-          <p className="text-lg font-medium text-gray-700 mb-2">
-            {hasActiveFilters ? "No matching questions found." : "No questions available yet."}
+        <AppCard className="text-center">
+          <p className="text-lg font-semibold text-slate-800">
+            {hasActiveFilters ? "沒有符合篩選的題目 · No matches" : "尚無題目 · No questions yet"}
           </p>
-          <p className="text-sm">
+          <p className="mt-2 text-sm text-slate-500">
             {hasActiveFilters
-              ? "Try a different topic, difficulty, or search keyword."
-              : "Seed the database or create a question from the UI to populate the bank."}
+              ? "請調整主題、難度或關鍵字。Try different topic, difficulty, or keyword."
+              : "請匯入或新增題目。Seed, import, or create a question."}
           </p>
-        </div>
+        </AppCard>
       ) : (
         <div className="space-y-4">
           {questions.map((question) => {
             const explanation = previewExplanation(question.explanation);
+            const classification = parseQuestionNotes(question.notes);
             const options = [
               ["A", question.optionA],
               ["B", question.optionB],
@@ -168,53 +170,68 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
             ] as const;
 
             return (
-              <article key={question.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <article
+                key={question.id}
+                className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-card transition-shadow hover:shadow-cardHover"
+              >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                        {question.topic}
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {classification ? (
+                        <span className="inline-flex rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">
+                          {classification.categoryLabel}
+                        </span>
+                      ) : null}
+                      <span className="inline-flex rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700 ring-1 ring-primary-200">
+                        主題 · {question.topic}
                       </span>
-                      <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                        Difficulty {question.difficulty}
+                      <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        難度 · Lv {question.difficulty}
                       </span>
+                      {classification ? (
+                        <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+                          重點 · {classification.subFocusLabel}
+                        </span>
+                      ) : null}
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 leading-7">{question.questionText}</h3>
+                    <h3 className="text-lg font-semibold leading-7 text-slate-900">{question.questionText}</h3>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 whitespace-nowrap">
-                      Correct Answer: {question.correctAnswer}
+                    <div className="whitespace-nowrap rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                      答案 · Ans {question.correctAnswer}
                     </div>
                     <a
                       href={`/questions/${question.id}/edit`}
-                      className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                      className="inline-flex items-center rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
                     >
-                      Manage
+                      編輯 · Edit
                     </a>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-5">
+                <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
                   {options.map(([key, value]) => (
                     <div
                       key={key}
                       className={`rounded-lg border px-3 py-2 text-sm ${
                         question.correctAnswer === key
-                          ? "border-green-200 bg-green-50 text-green-800"
-                          : "border-gray-200 bg-gray-50 text-gray-700"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                          : "border-slate-200 bg-slate-50 text-slate-700"
                       }`}
                     >
-                      <span className="font-semibold mr-2">{key}.</span>
+                      <span className="mr-2 font-semibold">{key}.</span>
                       {value}
                     </div>
                   ))}
                 </div>
 
                 {explanation ? (
-                  <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Explanation</p>
-                    <p className="text-sm text-gray-600">{explanation}</p>
+                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      解析 · Explanation
+                    </p>
+                    <p className="text-sm leading-relaxed text-slate-700">{explanation}</p>
                   </div>
                 ) : null}
               </article>

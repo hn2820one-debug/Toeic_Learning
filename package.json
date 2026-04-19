@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev -H 127.0.0.1 -p 5173",
     "build": "next build",
     "start": "next start",
@@ -12,6 +13,9 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:generate": "prisma generate",
+    "db:delete-session": "tsx scripts/delete-study-session.ts",
+    "db:rebuild-phase1-bank": "tsx scripts/rebuild-personalized-phase1-bank.ts",
+    "smoke:csv-import": "node --conditions=react-server --import tsx scripts/smoke-csv-import.ts",
     "elo:decay": "node --conditions=react-server --import tsx scripts/elo-decay.ts",
     "seed:fsrs": "tsx scripts/seed-fsrs-from-checkpoint.ts",
     "test:fsrs": "node --conditions=react-server --import tsx scripts/test-fsrs.ts",

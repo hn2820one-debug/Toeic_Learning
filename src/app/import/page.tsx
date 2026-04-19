@@ -1,6 +1,9 @@
 import CsvImportSection from "@/app/import/CsvImportSection";
+import AppCard from "@/components/ui/AppCard";
+import BilingualHeading from "@/components/ui/BilingualHeading";
 import { QUESTION_DIFFICULTY_VALUES } from "@/lib/question-fields";
 import { QUESTION_IMPORT_EXAMPLE } from "@/lib/import";
+import { primaryButtonClass } from "@/lib/ui/form-classes";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +41,11 @@ function parseNonNegativeInt(value: SearchParamValue) {
 function getResultVariantClasses(status?: string) {
   switch (status) {
     case "success":
-      return "border-green-200 bg-green-50 text-green-800";
+      return "border-emerald-200 bg-emerald-50 text-emerald-900";
     case "warning":
-      return "border-amber-200 bg-amber-50 text-amber-800";
+      return "border-amber-200 bg-amber-50 text-amber-900";
     case "error":
-      return "border-red-200 bg-red-50 text-red-800";
+      return "border-red-200 bg-red-50 text-red-900";
     default:
       return "";
   }
@@ -65,33 +68,34 @@ export default function ImportPage({ searchParams }: ImportPageProps) {
   const hasSummary = Object.values(summary).every((value) => value !== undefined);
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Import</h2>
-      <p className="text-gray-500 mb-8">
-        Upload a JSON array or a CSV with headers to add rows to QuestionBankItem. JSON imports immediately; CSV uses
-        preview-then-commit with validation feedback.
-      </p>
+    <div className="max-w-5xl">
+      <BilingualHeading
+        titleZh="匯入題目"
+        titleEn="Import questions"
+        descriptionZh="從 JSON 或 CSV 將題目寫入本機題庫。CSV 採「先預覽、再匯入」，避免格式錯誤直接寫入。"
+        descriptionEn="Upload JSON or CSV to add rows to QuestionBankItem. CSV uses preview-then-commit with validation feedback."
+      />
 
       {status && message ? (
-        <div className={`mb-6 rounded-xl border px-4 py-4 ${getResultVariantClasses(status)}`}>
+        <div className={`mb-8 rounded-2xl border px-4 py-4 ${getResultVariantClasses(status)}`}>
           <p className="text-sm font-medium mb-3">{message}</p>
 
           {hasSummary ? (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 text-sm">
-              <div className="rounded-lg bg-white/60 px-3 py-2">
-                <p className="opacity-80 mb-1">Total Rows</p>
+              <div className="rounded-xl bg-white/70 px-3 py-2 shadow-sm">
+                <p className="opacity-80 mb-1">總列 · Total</p>
                 <p className="font-semibold">{summary.totalRowsProcessed}</p>
               </div>
-              <div className="rounded-lg bg-white/60 px-3 py-2">
-                <p className="opacity-80 mb-1">Imported</p>
+              <div className="rounded-xl bg-white/70 px-3 py-2 shadow-sm">
+                <p className="opacity-80 mb-1">匯入 · Imported</p>
                 <p className="font-semibold">{summary.importedCount}</p>
               </div>
-              <div className="rounded-lg bg-white/60 px-3 py-2">
-                <p className="opacity-80 mb-1">Skipped</p>
+              <div className="rounded-xl bg-white/70 px-3 py-2 shadow-sm">
+                <p className="opacity-80 mb-1">略過 · Skipped</p>
                 <p className="font-semibold">{summary.skippedCount}</p>
               </div>
-              <div className="rounded-lg bg-white/60 px-3 py-2">
-                <p className="opacity-80 mb-1">Invalid</p>
+              <div className="rounded-xl bg-white/70 px-3 py-2 shadow-sm">
+                <p className="opacity-80 mb-1">無效 · Invalid</p>
                 <p className="font-semibold">{summary.invalidCount}</p>
               </div>
             </div>
@@ -99,37 +103,48 @@ export default function ImportPage({ searchParams }: ImportPageProps) {
         </div>
       ) : null}
 
-      <div className="space-y-6">
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 mb-2">Accepted Format</p>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">JSON file with a top-level array</h3>
-          <div className="space-y-2 text-sm text-gray-600 mb-6">
-            <p>Each object must include questionText, optionA, optionB, optionC, optionD, correctAnswer, topic, and difficulty.</p>
+      <p className="mb-6 text-sm text-slate-600">
+        建議先完成下方 <strong>CSV</strong> 四步驟；JSON 一鍵匯入置於頁面底部。
+        <span className="mt-1 block text-slate-500">
+          Start with the CSV flow below; JSON quick import is at the bottom.
+        </span>
+      </p>
+
+      <div className="space-y-8">
+        <CsvImportSection />
+
+        <AppCard>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">JSON · 格式說明</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-900">頂層為陣列的 JSON</h2>
+          <p className="mt-1 text-sm text-slate-500">Top-level JSON array format</p>
+          <div className="mt-4 space-y-2 text-sm text-slate-600">
             <p>
-              explanation is optional. correctAnswer is normalized to uppercase and must end up as A, B, C, or D. difficulty
-              is normalized to uppercase and must end up as {QUESTION_DIFFICULTY_VALUES.join(" / ")}.
+              每個物件需含 questionText、optionA–D、correctAnswer、topic、difficulty。Each object needs those fields.
             </p>
-            <p>topic is trimmed and repeated internal whitespace is collapsed so larger structured seed data follows the same rule set.</p>
-            <p>Duplicate handling rule: rows are skipped when questionText already exists in QuestionBankItem or already appeared earlier in the same file.</p>
+            <p>
+              explanation 選填。correctAnswer 會轉成大寫，須為 A–D。difficulty 為{" "}
+              {QUESTION_DIFFICULTY_VALUES.join(" / ")}。
+            </p>
+            <p>題目文字重複時會略過（題庫已存在或同檔較早列）。</p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 overflow-x-auto">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap">{QUESTION_IMPORT_EXAMPLE}</pre>
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 overflow-x-auto">
+            <pre className="text-sm text-slate-700 whitespace-pre-wrap">{QUESTION_IMPORT_EXAMPLE}</pre>
           </div>
-        </section>
+        </AppCard>
 
-        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 mb-2">Import File</p>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Upload question JSON</h3>
-          <p className="text-sm text-gray-600 mb-6">
-            Successful imports become available on /questions immediately and can be used by later training sessions. This same
-            normalized object shape is also the accepted format for future larger structured seed data.
+        <AppCard>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">JSON · 上傳</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-900">上傳 JSON 檔</h2>
+          <p className="mt-1 text-sm text-slate-500">Upload a question JSON file</p>
+          <p className="mt-4 text-sm text-slate-600">
+            成功後題目會立即出現在 <code className="rounded bg-slate-100 px-1">/questions</code>，並可供訓練使用。
           </p>
 
-          <form action="/import/submit" method="post" encType="multipart/form-data" className="space-y-4">
+          <form action="/import/submit" method="post" encType="multipart/form-data" className="mt-6 space-y-4">
             <div>
-              <label htmlFor="file" className="block text-sm font-medium text-gray-700 mb-2">
-                JSON file
+              <label htmlFor="file" className="block text-sm font-medium text-slate-800 mb-2">
+                JSON 檔案 · JSON file
               </label>
               <input
                 id="file"
@@ -137,20 +152,15 @@ export default function ImportPage({ searchParams }: ImportPageProps) {
                 type="file"
                 accept=".json,application/json"
                 required
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+                className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 file:mr-4 file:rounded-lg file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-primary-700"
               />
             </div>
 
-            <button
-              type="submit"
-              className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              Import Questions
+            <button type="submit" className={primaryButtonClass}>
+              匯入題目 · Import questions
             </button>
           </form>
-        </section>
-
-        <CsvImportSection />
+        </AppCard>
       </div>
     </div>
   );

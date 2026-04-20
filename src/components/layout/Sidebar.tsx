@@ -12,12 +12,24 @@ import {
   Upload,
   GraduationCap,
   Map,
+  Headphones,
+  type LucideIcon,
 } from "lucide-react";
 
-const navItems = [
+type NavItem = {
+  href: string;
+  zh: string;
+  en: string;
+  icon: LucideIcon;
+  /** Highlight when pathname starts with `href/` (e.g. /listening/[id]). */
+  prefixMatch?: boolean;
+};
+
+const navItems: NavItem[] = [
   { href: "/", zh: "儀表板", en: "Dashboard", icon: LayoutDashboard },
   { href: "/learn", zh: "今日學習", en: "Today's learning", icon: GraduationCap },
   { href: "/progress", zh: "能力地圖", en: "Mastery map", icon: Map },
+  { href: "/listening", zh: "聽力題本", en: "Listening", icon: Headphones, prefixMatch: true },
   { href: "/training", zh: "每日訓練", en: "Daily Training", icon: Dumbbell },
   { href: "/questions", zh: "題庫", en: "Question Bank", icon: BookOpen },
   { href: "/history", zh: "紀錄", en: "History", icon: History },
@@ -38,13 +50,16 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-        {navItems.map(({ href, zh, en, icon: Icon }) => (
+        {navItems.map(({ href, zh, en, icon: Icon, prefixMatch }) => {
+          const active =
+            pathname === href || (prefixMatch === true && pathname.startsWith(`${href}/`));
+          return (
           <Link
             key={href}
             href={href}
             className={clsx(
               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
-              pathname === href
+              active
                 ? "bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md shadow-primary-900/40 ring-1 ring-white/10"
                 : "text-slate-300 hover:bg-white/5 hover:text-white",
             )}
@@ -55,14 +70,15 @@ export default function Sidebar() {
               <span
                 className={clsx(
                   "text-[11px] font-normal",
-                  pathname === href ? "text-primary-100" : "text-slate-400",
+                  active ? "text-primary-100" : "text-slate-400",
                 )}
               >
                 {en}
               </span>
             </span>
           </Link>
-        ))}
+        );
+        })}
       </nav>
 
       <div className="border-t border-slate-700/80 px-5 py-4 text-[11px] leading-relaxed text-slate-500">

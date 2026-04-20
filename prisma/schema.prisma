@@ -80,6 +80,7 @@ model User {
   learningLoopSessions LearningSession[]
   studyTasks           StudyTask[]
   checkpointAttempts   CheckpointAttempt[]
+  listeningWorkbookProgress UserListeningWorkbookProgress[]
 
   @@unique([externalAuthProvider, externalUserId])
   @@map("users")
@@ -800,4 +801,53 @@ model ScoreHistory {
   createdAt DateTime @default(now())
 
   @@map("score_history")
+}
+
+// ─────────────────────────────────────────────
+//  LISTENING WORKBOOK (external video — workbook-first, not in-app player)
+// ─────────────────────────────────────────────
+model ListeningWorkbook {
+  id                   String   @id @default(cuid())
+  title                String
+  /// e.g. "YouTube · BBC Learning English"
+  sourceLabel          String?
+  sourceUrl            String
+  startSec             Float?
+  endSec               Float?
+  transcript           String   @default("")
+  keyPhrasesJson       Json?
+  /// First-listen MCQs — JSON array, see `src/lib/listening/workbook-types.ts`
+  questionsRound1Json  Json
+  /// Second-listen MCQs
+  questionsRound2Json  Json
+  dictationLinesJson   Json?
+  shadowingLinesJson   Json?
+  takeawayHintZh       String?
+  tomorrowReviewHintZh String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  progressRows UserListeningWorkbookProgress[]
+
+  @@map("listening_workbooks")
+}
+
+model UserListeningWorkbookProgress {
+  id                         String            @id @default(cuid())
+  userId                     Int
+  user                       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workbookId                 String
+  workbook                   ListeningWorkbook @relation(fields: [workbookId], references: [id], onDelete: Cascade)
+  round1AnswersJson          Json?
+  round2AnswersJson          Json?
+  dictationAnswersJson       Json?
+  shadowingCheckedJson       Json?
+  takeawayUser               String?
+  tomorrowReviewPointsJson   Json?
+  lastStepSeen               Int               @default(1)
+  updatedAt                  DateTime          @updatedAt
+
+  @@unique([userId, workbookId])
+  @@index([userId])
+  @@map("user_listening_workbook_progress")
 }

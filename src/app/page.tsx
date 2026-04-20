@@ -4,13 +4,15 @@ import { ArrowRight, BookOpen, CheckCircle2, Clock, Layers, Sparkles } from "luc
 import AppCard from "@/components/ui/AppCard";
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import { getHomeDashboardData } from "@/lib/dashboard-next-action";
-import type { DailyTaskKind } from "@/lib/learning-path";
+import { learningTaskBadgeKey } from "@/lib/learning-path";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
 export const dynamic = "force-dynamic";
 
+type TaskBadge = ReturnType<typeof learningTaskBadgeKey>;
+
 const KIND_LABEL: Record<
-  DailyTaskKind,
+  TaskBadge,
   { zh: string; en: string; badgeClass: string }
 > = {
   REVIEW: { zh: "複習", en: "REVIEW", badgeClass: "bg-rose-600" },
@@ -57,13 +59,13 @@ export default async function HomePage() {
               <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`inline-flex rounded-lg px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white ${KIND_LABEL[d.nextTask.kind].badgeClass}`}
+                    className={`inline-flex rounded-lg px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white ${KIND_LABEL[learningTaskBadgeKey(d.nextTask)].badgeClass}`}
                   >
-                    {KIND_LABEL[d.nextTask.kind].zh} · {KIND_LABEL[d.nextTask.kind].en}
+                    {KIND_LABEL[learningTaskBadgeKey(d.nextTask)].zh} · {KIND_LABEL[learningTaskBadgeKey(d.nextTask)].en}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                     <Clock size={14} aria-hidden />
-                    ~{d.nextTask.estimatedMinutes} min
+                    ~{d.nextTask.estimatedMins} min
                   </span>
                 </div>
                 <h3 className="text-xl font-bold text-slate-900">{d.nextTask.titleZh}</h3>

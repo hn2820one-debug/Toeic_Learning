@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { rankLearningTasks, mergeTopicOrderWithDb, sumEstimatedMinutes } from "@/lib/learning-path";
+import { learningTaskBadgeKey, mergeTopicOrderWithDb, rankLearningTasks, sumEstimatedMinutes } from "@/lib/learning-path";
 
-describe("rankLearningTasks", () => {
+describe("getRankedLearningTasks (rankLearningTasks alias)", () => {
   it("prioritizes REVIEW when FSRS has due items", () => {
     const tasks = rankLearningTasks({
       topicOrder: ["office", "finance"],
       progressByTopic: {},
       fsrs: { dueCount: 3, learningDueCount: 0 },
     });
-    expect(tasks[0]?.kind).toBe("REVIEW");
-    expect(tasks.some((t) => t.kind === "LEARN")).toBe(true);
+    expect(learningTaskBadgeKey(tasks[0]!)).toBe("REVIEW");
+    expect(tasks.some((t) => t.type === "learn")).toBe(true);
   });
 
   it("orders TEST before PRACTICE before LEARN by tier when no review", () => {
@@ -23,7 +23,7 @@ describe("rankLearningTasks", () => {
       },
       fsrs: { dueCount: 0, learningDueCount: 0 },
     });
-    expect(tasks.map((t) => t.kind)).toEqual(["TEST", "PRACTICE", "LEARN"]);
+    expect(tasks.map((t) => t.type)).toEqual(["test", "practice", "learn"]);
   });
 
   it("returns empty when nothing actionable (mastered topics, no FSRS)", () => {
@@ -42,7 +42,7 @@ describe("rankLearningTasks", () => {
       fsrs: { dueCount: 0, learningDueCount: 0 },
     });
     expect(tasks.length).toBeGreaterThanOrEqual(1);
-    expect(tasks.find((t) => t.kind === "LEARN")?.topicKey).toBe("office");
+    expect(tasks.find((t) => t.type === "learn")?.topicKey).toBe("office");
   });
 });
 

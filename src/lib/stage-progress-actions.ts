@@ -1,6 +1,7 @@
 import type { TopicProgressStage } from "../../generated/prisma";
 
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
+import { getTopicProgressActions, type TopicProgressLabels } from "@/lib/learning-path";
 
 export type ProgressCta = {
   primary: { href: string; labelZh: string; labelEn: string };
@@ -8,37 +9,21 @@ export type ProgressCta = {
 };
 
 /**
- * Closed-loop CTA routing by topic stage — pure; safe to share across `/progress` and future surfaces.
+ * Closed-loop CTA routing — delegates to `getTopicProgressActions` in the learning path engine
+ * so `/progress` matches `/learn` and home next action hrefs.
  */
-export function getActionForStage(stage: TopicProgressStage, topicKey: Phase1TopicKey): ProgressCta {
-  const q = encodeURIComponent(topicKey);
-  switch (stage) {
-    case "New":
-      return {
-        primary: { href: `/learn/${topicKey}`, labelZh: "開始學習", labelEn: "Start learning" },
-      };
-    case "Introduced":
-      return {
-        primary: { href: `/practice?topicKey=${q}`, labelZh: "練習", labelEn: "Practice" },
-        secondary: { href: `/learn/${topicKey}`, labelZh: "教材", labelEn: "Lessons" },
-      };
-    case "Practiced":
-      return {
-        primary: { href: `/test?topicKey=${q}`, labelZh: "驗收", labelEn: "Checkpoint test" },
-        secondary: { href: `/practice?topicKey=${q}`, labelZh: "再練習", labelEn: "Practice again" },
-      };
-    case "Tested":
-    case "Mastered":
-    case "Maintained":
-      return {
-        primary: { href: `/learn/${topicKey}`, labelZh: "回顧內容", labelEn: "Review content" },
-        secondary: { href: "/review", labelZh: "FSRS 複習", labelEn: "FSRS review" },
-      };
-    default:
-      return {
-        primary: { href: `/learn/${topicKey}`, labelZh: "前往主題", labelEn: "Open topic" },
-      };
-  }
+export function getActionForStage(
+  stage: TopicProgressStage,
+  topicKey: Phase1TopicKey,
+  labels?: TopicProgressLabels,
+): ProgressCta {
+  const { primary, secondary } = getTopicProgressActions(topicKey, stage, labels);
+  return {
+    primary: { href: primary.href, labelZh: primary.ctaLabelZh, labelEn: primary.ctaLabelEn },
+    secondary: secondary
+      ? { href: secondary.href, labelZh: secondary.ctaLabelZh, labelEn: secondary.ctaLabelEn }
+      : undefined,
+  };
 }
 
 export type StageBadgeTone = "slate" | "sky" | "amber" | "violet" | "emerald" | "teal";

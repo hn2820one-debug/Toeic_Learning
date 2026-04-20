@@ -26,7 +26,7 @@ function formatAccuracy(row: TopicProgressRowView): string | null {
 }
 
 export default function ProgressRow({ row }: { row: TopicProgressRowView }) {
-  const cta = getActionForStage(row.stage, row.topicKey);
+  const cta = getActionForStage(row.stage, row.topicKey, { zh: row.labelZh, en: row.labelEn });
   const acc = formatAccuracy(row);
 
   return (

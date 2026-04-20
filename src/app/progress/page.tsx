@@ -27,7 +27,7 @@ export default async function ProgressPage() {
         titleZh="能力地圖"
         titleEn="Mastery map"
         descriptionZh="依 Phase 1 模組檢視每個主題的閉環階段與下一步；資料來自 UserTopicProgress / ModuleProgress，而非舊 DailySession。"
-        descriptionEn="Phase 1 modules, closed-loop stages, and next steps from progress tables — not legacy daily sessions."
+        descriptionEn="Phase 1 modules and stages; per-topic CTAs use the same learning-path engine as /learn and the home next action."
       />
 
       {model.kind === "no_user" ? (
@@ -140,15 +140,17 @@ export default async function ProgressPage() {
       </section>
 
       <p className="mt-10 text-center text-xs text-slate-400">
-        需要今日排序的下一步請用{" "}
+        全站「下一步」排序與本頁主題 CTA 皆來自同一套 learning path engine（<code className="rounded bg-slate-100 px-1">getRankedLearningTasks</code> /{" "}
+        <code className="rounded bg-slate-100 px-1">getTopicProgressActions</code>）。
+        儀表板與今日學習：
         <Link href="/" className="underline">
-          儀表板
-        </Link>{" "}
-        或{" "}
-        <Link href="/learn" className="underline">
-          今日學習
+          首頁
         </Link>
-        （與本頁獨立，避免重複排序邏輯）。
+        、
+        <Link href="/learn" className="underline">
+          /learn
+        </Link>
+        。
       </p>
     </div>
   );

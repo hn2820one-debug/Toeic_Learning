@@ -9,6 +9,7 @@ import {
   type RatingName as FsrsRatingName,
   type SchedulerRating,
 } from "./fsrs";
+import { getDevUserIdForSession } from "./dev-user";
 import { prisma } from "./prisma";
 import { composeSession } from "./session-composer";
 
@@ -277,8 +278,11 @@ export async function pickTrainingQuestionIds(limit = TRAINING_QUESTION_LIMIT) {
 }
 
 export async function createStudySession(questionIds: number[]) {
+  const userId = await getDevUserIdForSession();
+
   return prisma.studySession.create({
     data: {
+      ...(userId !== undefined ? { userId } : {}),
       startedAt: new Date(),
       mode: "quick",
       targetCount: questionIds.length,

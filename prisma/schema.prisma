@@ -21,15 +21,78 @@ enum FsrsRating {
   Easy
 }
 
+enum UserRole {
+  LEARNER
+  ADMIN
+}
+
 // ─────────────────────────────────────────────
-//  USERS
+//  USERS & ACCESS (multi-tenant foundation — no OAuth in this repo yet)
 // ─────────────────────────────────────────────
 model User {
   id        Int      @id @default(autoincrement())
+  /// Short handle; prefer UserProfile.displayName when set.
   name      String   @default("Keith")
+  /// Nullable until the learner links an email (hosted / auth phase).
+  email     String?  @unique
+  /// Reserved for future SSO (e.g. google, supabase). Not wired to any SDK in this repo.
+  externalAuthProvider String?
+  /// External subject id from the provider; use with externalAuthProvider.
+  externalUserId       String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  profile       UserProfile?
+  enrollments   Enrollment[]
+  preferences   UserPreference[]
+  studySessions StudySession[]
+
+  @@unique([externalAuthProvider, externalUserId])
   @@map("users")
+}
+
+/// Slow-changing learner-facing fields (display, goals, role). One row per user.
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      Int      @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName String?
+  /// IANA timezone id, e.g. Asia/Taipei
+  timezone    String?
+  /// Target TOEIC score or similar goal (optional).
+  targetScore Int?
+  role        UserRole @default(LEARNER)
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+/// Program enrollment (programKey aligns with file-based curriculum, e.g. phase1).
+model Enrollment {
+  id          String   @id @default(cuid())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey  String
+  status      String   @default("active")
+  enrolledAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, programKey])
+  @@index([programKey])
+  @@map("enrollments")
+}
+
+/// Key/value preferences (value often JSON) — optional extension point.
+model UserPreference {
+  id        String   @id @default(cuid())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@map("user_preferences")
 }
 
 // ─────────────────────────────────────────────
@@ -234,6 +297,9 @@ model TopicMastery {
 
 model StudySession {
   id             Int      @id @default(autoincrement())
+  /// Set when the runtime knows the acting user (dev bootstrap or future auth). Legacy rows may be null.
+  userId         Int?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   startedAt      DateTime
   endedAt        DateTime?
   abandonedAt    DateTime?
@@ -247,6 +313,7 @@ model StudySession {
   answerHistory AnswerHistory[]
   items         StudySessionQuestion[]
 
+  @@index([userId])
   @@map("study_sessions")
 }
 

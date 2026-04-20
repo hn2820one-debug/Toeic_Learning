@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 
-import LessonMicroCardBody from "@/components/learn/LessonMicroCardBody";
+import DisplayLessonBlockView from "@/components/learn/DisplayLessonBlockView";
 import LessonProgressHeader from "@/components/learn/LessonProgressHeader";
 import AppCard from "@/components/ui/AppCard";
+import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
+import type { DisplayLessonBlock } from "@/lib/learn/lesson-display";
 import type { LearnTopicLessonRow } from "@/lib/learn-topic-page";
 import type { LearnProgressPayload } from "@/lib/learn-progress-json";
 import { isAllLessonsUnderstood } from "@/lib/learn-progress-json";
-import type { LessonMicroCard } from "@/lib/parse-lesson-micro-cards";
 import type { TopicProgressStage } from "../../../../generated/prisma";
 
 import {
@@ -24,8 +25,8 @@ type LearnTopicClientProps = {
   topicLabel: string;
   lessons: LearnTopicLessonRow[];
   lessonPos: number;
-  /** Micro-cards for the active lesson only (server-parsed). */
-  microCards: LessonMicroCard[];
+  /** Pedagogical display blocks for the active lesson (server-parsed). */
+  displayBlocks: DisplayLessonBlock[];
   cardPos: number;
   learnProgress: LearnProgressPayload;
   stage: TopicProgressStage | null;
@@ -39,7 +40,7 @@ export default function LearnTopicClient({
   topicLabel,
   lessons,
   lessonPos,
-  microCards,
+  displayBlocks,
   cardPos,
   learnProgress,
   stage,
@@ -55,7 +56,7 @@ export default function LearnTopicClient({
   const safeLessonPos = n === 0 ? 0 : Math.min(Math.max(0, lessonPos), n - 1);
   const current = lessons[safeLessonPos] ?? null;
 
-  const m = microCards.length;
+  const m = displayBlocks.length;
   const safeCardPos = m === 0 ? 0 : Math.min(Math.max(0, cardPos), m - 1);
   const isLastCard = m > 0 && safeCardPos >= m - 1;
 
@@ -158,7 +159,7 @@ export default function LearnTopicClient({
     );
   }
 
-  const activeCard = m > 0 ? microCards[safeCardPos] : null;
+  const activeBlock = m > 0 ? displayBlocks[safeCardPos] : null;
 
   return (
     <div className="space-y-6">
@@ -177,11 +178,12 @@ export default function LearnTopicClient({
         </AppCard>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200/60 bg-gradient-to-b from-slate-50/90 to-slate-100/40 p-4 shadow-inner md:p-6">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <LearningPageCanvas>
+        <LearningSurface className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">LEARN · 微課 · 一屏一概念</p>
-            <h1 className="text-xl font-bold text-slate-900">{topicLabel}</h1>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">LEARN · 例句優先 · 一屏一步</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{topicLabel}</h1>
           </div>
           {!hasUser ? (
             <p className="max-w-sm text-right text-xs text-amber-800">
@@ -200,23 +202,23 @@ export default function LearnTopicClient({
           lessonTitleEn={current?.titleEn}
         />
 
-        <div className="mt-8 min-h-[12rem]">
+        <div className="min-h-[12rem]">
           {!current?.bodyMarkdown?.trim() ? (
             <AppCard padding="md" className="border-slate-200 bg-white/90">
               <p className="text-sm text-slate-700">
                 此節正文未通過品質檢查或為空，暫不顯示。This segment failed QA or is empty.
               </p>
             </AppCard>
-          ) : m === 0 || !activeCard ? (
+          ) : m === 0 || !activeBlock ? (
             <AppCard padding="md" className="border-slate-200 bg-white/90">
-              <p className="text-sm text-slate-700">無法解析此節內容為微課卡。Unable to parse micro-cards.</p>
+              <p className="text-sm text-slate-700">無法顯示此節教學步驟。Unable to render lesson steps.</p>
             </AppCard>
           ) : (
-            <LessonMicroCardBody card={activeCard} />
+            <DisplayLessonBlockView block={activeBlock} />
           )}
         </div>
 
-        <div className="mt-10 space-y-6 border-t border-slate-200/80 pt-8">
+        <div className="space-y-6 border-t border-slate-200/80 pt-8">
           {current?.bodyMarkdown?.trim() && m > 0 ? (
             <div className="flex flex-wrap gap-3">
               <button
@@ -296,7 +298,8 @@ export default function LearnTopicClient({
             ← 回今日學習 · Back to /learn
           </Link>
         </div>
-      </div>
+        </LearningSurface>
+      </LearningPageCanvas>
     </div>
   );
 }

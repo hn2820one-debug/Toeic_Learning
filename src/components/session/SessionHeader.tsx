@@ -37,7 +37,7 @@ export default function SessionHeader({
 }: SessionHeaderProps) {
   const modeLabel = mode === "practice" ? "Practice" : mode === "test" ? "Test" : "Review";
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white/95 to-slate-50/40 px-4 py-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{modeLabel}</p>

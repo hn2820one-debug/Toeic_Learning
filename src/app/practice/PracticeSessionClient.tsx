@@ -6,8 +6,12 @@ import { useMemo, useState, useTransition } from "react";
 
 import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
+import CollapsibleNote from "@/components/ui/collapsible-note";
+import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
+import SectionLabel from "@/components/ui/section-label";
 import type { PracticeCompletedSummary, PracticeQuestionPayload } from "@/lib/practice/practice-page-loader";
 import { parsePracticeItemState } from "@/lib/practice/practice-state";
+import { splitExplanationForFeedback } from "@/lib/explanation-split";
 import type { CompletionNextStep } from "@/lib/session-summary";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
@@ -92,8 +96,8 @@ export default function PracticeSessionClient({
 
   if (status === "completed" && completedSummary) {
     return (
-      <div className="space-y-6">
-        <AppCard padding="md" className="border-emerald-200 bg-emerald-50/90">
+      <LearningSurface className="space-y-6">
+        <LearningPageCanvas className="border-emerald-200/50 bg-emerald-50/60">
           <h2 className="text-lg font-semibold text-emerald-950">練習結果 · Practice result</h2>
           <ul className="mt-3 space-y-1 text-sm text-emerald-900">
             <li>原始正答率（首答）· Raw: {(completedSummary.rawCorrectRate * 100).toFixed(0)}%</li>
@@ -129,8 +133,8 @@ export default function PracticeSessionClient({
               回主題學習 · Back to learn
             </Link>
           </div>
-        </AppCard>
-      </div>
+        </LearningPageCanvas>
+      </LearningSurface>
     );
   }
 
@@ -145,37 +149,53 @@ export default function PracticeSessionClient({
     );
   }
 
+  const lastAttempt = st.attempts.length > 0 ? st.attempts[st.attempts.length - 1]! : null;
+  const expl = splitExplanationForFeedback(q.explanation);
+
   return (
     <div className="space-y-6">
-      <SessionHeader
-        mode="practice"
-        current={safePos + 1}
-        total={n}
-        titleZh={label}
-        subtitleZh={`已用提示層數 ${st.maxHintLayerSeen} · 本題嘗試 ${st.attempts.length} / 3`}
-        topicOrModuleLabel="腳手架練習"
-      />
+      <LearningSurface>
+        <SessionHeader
+          mode="practice"
+          current={safePos + 1}
+          total={n}
+          titleZh={label}
+          subtitleZh={`已用提示層數 ${st.maxHintLayerSeen} · 本題嘗試 ${st.attempts.length} / 3`}
+          topicOrModuleLabel="腳手架練習"
+        />
+      </LearningSurface>
 
-      <AppCard padding="md">
-        <p className="mb-4 whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+      <LearningSurface>
+        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
+        <div className="space-y-3">
+          <SectionLabel kind="stem" />
+          <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          <SectionLabel kind="options" />
+          <div className="grid gap-2 sm:grid-cols-2">
           {(["A", "B", "C", "D"] as const).map((k) => (
             <button
               key={k}
               type="button"
               disabled={st.status !== "open" || pending}
               onClick={() => onSubmit(k)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-left text-sm text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+              className="rounded-xl border border-slate-200/90 bg-slate-50/50 px-3 py-3 text-left text-sm leading-relaxed text-slate-800 shadow-sm hover:bg-white disabled:opacity-40"
             >
               <span className="font-semibold text-primary-700">{k}.</span>{" "}
               {k === "A" ? q.optionA : k === "B" ? q.optionB : k === "C" ? q.optionC : q.optionD}
             </button>
           ))}
+          </div>
         </div>
 
         {!hintsDisabled && st.status === "open" ? (
-          <div className="mt-6 border-t border-slate-200 pt-6">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">看提示 · Hints (separate from submit)</p>
+          <div className="mt-6 border-t border-dashed border-slate-200/90 pt-6 opacity-95">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <SectionLabel kind="hint" />
+              <span className="text-[11px] text-slate-400">與送出分開 · separate from submit</span>
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -203,23 +223,51 @@ export default function PracticeSessionClient({
               </button>
             </div>
             {st.maxHintLayerSeen >= 1 ? (
-              <p className="mt-3 rounded-lg bg-amber-50/80 p-3 text-sm text-amber-950">{q.hints.level1}</p>
+              <p className="mt-3 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level1}</p>
             ) : null}
             {st.maxHintLayerSeen >= 2 ? (
-              <p className="mt-2 rounded-lg bg-amber-50/80 p-3 text-sm text-amber-950">{q.hints.level2}</p>
+              <p className="mt-2 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level2}</p>
             ) : null}
             {st.maxHintLayerSeen >= 3 ? (
-              <p className="mt-2 rounded-lg bg-amber-50/80 p-3 text-sm text-amber-950">{q.hints.level3}</p>
+              <p className="mt-2 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level3}</p>
             ) : null}
           </div>
         ) : hintsDisabled ? (
           <p className="mt-6 text-xs font-medium text-slate-500">最後一題：不提供提示層（預熱）。</p>
         ) : null}
 
-        {localReveal ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-950">
-            <p className="font-semibold">參考解析</p>
-            <p className="mt-1 whitespace-pre-wrap">{localReveal}</p>
+        {st.status !== "open" ? (
+          <div className="mt-6 space-y-4 rounded-2xl border border-sky-100/90 bg-sky-50/35 p-4">
+            <SectionLabel kind="feedback" />
+            <dl className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
+                <dt className="text-xs text-slate-500">你選了 · Yours</dt>
+                <dd className="font-mono text-sm font-semibold text-slate-900">{lastAttempt?.choice ?? "—"}</dd>
+              </div>
+              <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
+                <dt className="text-xs text-slate-500">正解 · Correct</dt>
+                <dd className="font-mono text-sm font-semibold text-emerald-800">{q.correctAnswer}</dd>
+              </div>
+              <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
+                <dt className="text-xs text-slate-500">首答 · First try</dt>
+                <dd className="text-sm font-semibold text-slate-800">{lastAttempt?.correct === true ? "✓" : lastAttempt?.correct === false ? "✗" : "—"}</dd>
+              </div>
+            </dl>
+            {expl.summary ? (
+              <p className="max-w-prose text-sm leading-relaxed text-slate-800">
+                <span className="font-semibold text-slate-600">關鍵差別 · Key:</span> {expl.summary}
+              </p>
+            ) : null}
+            {expl.detail.trim().length > 0 ? (
+              <CollapsibleNote summaryZh="進一步說明" summaryEn="More detail">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{expl.detail}</p>
+              </CollapsibleNote>
+            ) : null}
+            {localReveal ? (
+              <CollapsibleNote summaryZh="補充解析" summaryEn="Extra" tone="default">
+                <p className="whitespace-pre-wrap text-sm text-slate-800">{localReveal}</p>
+              </CollapsibleNote>
+            ) : null}
           </div>
         ) : null}
 
@@ -246,7 +294,8 @@ export default function PracticeSessionClient({
             )}
           </div>
         ) : null}
-      </AppCard>
+        </AppCard>
+      </LearningSurface>
     </div>
   );
 }

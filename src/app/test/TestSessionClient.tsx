@@ -6,6 +6,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
+import CollapsibleNote from "@/components/ui/collapsible-note";
+import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
+import SectionLabel from "@/components/ui/section-label";
+import { splitExplanationForFeedback } from "@/lib/explanation-split";
 import type { CompletionNextStep } from "@/lib/session-summary";
 import type { TestQuestionPayloadActive } from "@/lib/test-page-loader";
 import { parseTestItemState, TEST_SECONDS_PER_QUESTION, TEST_TIMEOUT_USER_CHOICE, type TestResultSummary } from "@/lib/test-mode";
@@ -146,8 +150,8 @@ export default function TestSessionClient({
   if (status === "completed" && resultSummary) {
     const s = resultSummary;
     return (
-      <div className="space-y-6">
-        <AppCard padding="md" className={s.passed ? "border-emerald-200 bg-emerald-50/90" : "border-rose-200 bg-rose-50/90"}>
+      <LearningSurface className="space-y-6">
+        <LearningPageCanvas className={s.passed ? "border-emerald-200/60 bg-emerald-50/50" : "border-rose-200/60 bg-rose-50/50"}>
           <h2 className="text-lg font-semibold text-slate-900">驗收結果 · Checkpoint result</h2>
           <ul className="mt-3 space-y-1 text-sm text-slate-800">
             <li>整體正確率 · Overall: {(s.overallAccuracy * 100).toFixed(0)}%（{s.overallCorrect} / 15）</li>
@@ -195,41 +199,55 @@ export default function TestSessionClient({
               今日學習 · /learn
             </Link>
           </div>
-        </AppCard>
+        </LearningPageCanvas>
 
-        <AppCard padding="md">
-          <h3 className="text-base font-semibold text-slate-900">逐題檢討（含解釋）· Review</h3>
+        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
+          <h3 className="text-base font-semibold text-slate-900">逐題檢討 · Review</h3>
+          <p className="mt-1 text-xs text-slate-500">先對照正解，細節可展開 · Match answers first; expand for detail</p>
           <div className="mt-4 space-y-6">
-            {s.perItem.map((row) => (
-              <div key={row.position} className="border-b border-slate-100 pb-6 last:border-0 last:pb-0">
+            {s.perItem.map((row) => {
+              const ex = splitExplanationForFeedback(row.explanation);
+              return (
+              <div key={row.position} className="border-b border-slate-100/90 pb-6 last:border-0 last:pb-0">
                 <p className="text-xs font-semibold text-slate-500">
                   第 {row.position + 1} 題
                   {row.timedOut ? (
                     <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-950">TIMEOUT</span>
                   ) : null}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-900">{row.questionText}</p>
-                <ul className="mt-2 space-y-1 text-sm text-slate-700">
-                  <li>
-                    你的答案 · Yours: <span className="font-mono">{row.userChoice}</span>{" "}
-                    {row.correct ? "✓" : "✗"}
-                  </li>
-                  <li>
-                    正解 · Correct: <span className="font-mono">{row.correctAnswer}</span>
-                  </li>
-                </ul>
-                {row.explanation ? (
-                  <p className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                    {row.explanation}
+                <div className="mt-3 space-y-2">
+                  <SectionLabel kind="stem" />
+                  <p className="max-w-prose whitespace-pre-wrap text-sm leading-relaxed text-slate-900">{row.questionText}</p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                  <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                    <p className="text-xs text-slate-500">你選了 · Yours</p>
+                    <p className="font-mono font-semibold">{row.userChoice}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                    <p className="text-xs text-slate-500">正解 · Correct</p>
+                    <p className="font-mono font-semibold text-emerald-800">{row.correctAnswer}</p>
+                  </div>
+                  <span className="self-center text-lg">{row.correct ? "✓" : "✗"}</span>
+                </div>
+                {ex.summary ? (
+                  <p className="mt-3 max-w-prose text-sm leading-relaxed text-slate-800">
+                    <span className="font-semibold text-slate-600">關鍵差別 · Key:</span> {ex.summary}
                   </p>
-                ) : (
-                  <p className="mt-2 text-xs text-slate-500">（題庫未附解析）</p>
-                )}
+                ) : null}
+                {ex.detail.trim().length > 0 ? (
+                  <CollapsibleNote summaryZh="正解解釋（完整）" summaryEn="Full explanation" className="mt-3">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{ex.detail}</p>
+                  </CollapsibleNote>
+                ) : !row.explanation ? (
+                  <p className="mt-3 text-xs text-slate-500">（題庫未附解析）</p>
+                ) : null}
               </div>
-            ))}
+            );
+            })}
           </div>
         </AppCard>
-      </div>
+      </LearningSurface>
     );
   }
 
@@ -263,40 +281,54 @@ export default function TestSessionClient({
 
   return (
     <div className="space-y-6">
-      <SessionHeader
-        mode="test"
-        current={safePos + 1}
-        total={n}
-        titleZh={label}
-        subtitleZh="無提示 · 單次作答"
-        topicOrModuleLabel="限時驗收"
-        timer={{
-          active: timerActive && !pending,
-          totalSec: TEST_SECONDS_PER_QUESTION,
-          resetKey: `${sessionId}-${safePos}`,
-          onExpire: handleExpire,
-          tone: "amber",
-        }}
-      />
+      <LearningSurface>
+        <SessionHeader
+          mode="test"
+          current={safePos + 1}
+          total={n}
+          titleZh={label}
+          subtitleZh="無提示 · 單次作答"
+          topicOrModuleLabel="限時驗收"
+          timer={{
+            active: timerActive && !pending,
+            totalSec: TEST_SECONDS_PER_QUESTION,
+            resetKey: `${sessionId}-${safePos}`,
+            onExpire: handleExpire,
+            tone: "amber",
+          }}
+        />
+      </LearningSurface>
 
-      <AppCard padding="md">
-        <p className="mb-4 whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {(["A", "B", "C", "D"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              disabled={pending || st.phase === "answered"}
-              onClick={() => handleChoice(k)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-left text-sm text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-40"
-            >
-              <span className="font-semibold text-primary-700">{k}.</span>{" "}
-              {k === "A" ? q.optionA : k === "B" ? q.optionB : k === "C" ? q.optionC : q.optionD}
-            </button>
-          ))}
-        </div>
-        {pending ? <p className="mt-3 text-xs text-slate-500">處理中…</p> : null}
-      </AppCard>
+      <LearningSurface>
+        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <SectionLabel kind="timer" />
+            <span className="text-[11px] text-slate-400">時間壓力 · stay focused</span>
+          </div>
+          <div className="space-y-3">
+            <SectionLabel kind="stem" />
+            <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
+          </div>
+          <div className="mt-6 space-y-3">
+            <SectionLabel kind="options" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["A", "B", "C", "D"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  disabled={pending || st.phase === "answered"}
+                  onClick={() => handleChoice(k)}
+                  className="rounded-xl border border-slate-200/90 bg-slate-50/50 px-3 py-3 text-left text-sm leading-relaxed text-slate-800 shadow-sm hover:bg-white disabled:opacity-40"
+                >
+                  <span className="font-semibold text-primary-700">{k}.</span>{" "}
+                  {k === "A" ? q.optionA : k === "B" ? q.optionB : k === "C" ? q.optionC : q.optionD}
+                </button>
+              ))}
+            </div>
+          </div>
+          {pending ? <p className="mt-3 text-xs text-slate-500">處理中…</p> : null}
+        </AppCard>
+      </LearningSurface>
     </div>
   );
 }

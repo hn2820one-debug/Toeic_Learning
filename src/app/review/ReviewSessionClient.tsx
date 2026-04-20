@@ -6,6 +6,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
+import CollapsibleNote from "@/components/ui/collapsible-note";
+import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
+import SectionLabel from "@/components/ui/section-label";
+import { splitExplanationForFeedback } from "@/lib/explanation-split";
 import type { CompletionNextStep } from "@/lib/session-summary";
 import type { RatingPreviewMap, ReviewQuestionPayload } from "@/lib/review-page-loader";
 import {
@@ -174,8 +178,8 @@ export default function ReviewSessionClient({
     const next = getNextReviewAction({ remainingDueApprox: queueStatsAfter?.dueCount ?? 0 });
     const stats = getRatingStats(summary);
     return (
-      <div className="space-y-6">
-        <AppCard padding="md" className="border-emerald-200 bg-emerald-50/90">
+      <LearningSurface className="space-y-6">
+        <LearningPageCanvas className="border-emerald-200/50 bg-emerald-50/50">
           <h2 className="text-lg font-semibold text-emerald-950">複習完成 · Review done</h2>
           <ul className="mt-3 space-y-1 text-sm text-emerald-900">
             <li>
@@ -193,10 +197,10 @@ export default function ReviewSessionClient({
               </li>
             ) : null}
           </ul>
-        </AppCard>
+        </LearningPageCanvas>
 
         {summary.soonestNext.length > 0 ? (
-          <AppCard padding="md">
+          <AppCard padding="md" className="border-slate-200/80 bg-white/90">
             <h3 className="text-base font-semibold text-slate-900">較快再次出現 · Soonest next</h3>
             <ul className="mt-2 space-y-1 text-sm text-slate-700">
               {summary.soonestNext.map((row) => (
@@ -209,8 +213,8 @@ export default function ReviewSessionClient({
           </AppCard>
         ) : null}
 
-        <AppCard padding="md">
-          <p className="text-sm text-slate-700">{nextStep?.detailZh ?? next.hintZh}</p>
+        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
+          <p className="text-sm leading-relaxed text-slate-700">{nextStep?.detailZh ?? next.hintZh}</p>
           <p className="text-xs text-slate-500">{next.hintEn}</p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link href={nextStep?.href ?? next.href} className={primaryButtonClass}>
@@ -230,7 +234,7 @@ export default function ReviewSessionClient({
             </Link>
           </div>
         </AppCard>
-      </div>
+      </LearningSurface>
     );
   }
 
@@ -257,19 +261,22 @@ export default function ReviewSessionClient({
   const awaitingRating = st.phase === "answered" && st.rating == null;
   const explanationText =
     (q.explanation && q.explanation.trim().length > 0 ? q.explanation : null) ?? explanationFallbackCopy();
+  const ratingExpl = splitExplanationForFeedback(explanationText);
 
   if (awaitingRating) {
     const previews = ratingPreviews;
     return (
       <div className="space-y-6">
-        <SessionHeader
-          mode="review"
-          current={safePos + 1}
-          total={n}
-          titleZh="FSRS 複習"
-          subtitleZh="請依記憶難度選擇評分（會寫回 FSRS）"
-          topicOrModuleLabel="已作答，等待評分"
-        />
+        <LearningSurface>
+          <SessionHeader
+            mode="review"
+            current={safePos + 1}
+            total={n}
+            titleZh="FSRS 複習"
+            subtitleZh="請依記憶難度選擇評分（會寫回 FSRS）"
+            topicOrModuleLabel="已作答，等待評分"
+          />
+        </LearningSurface>
 
         {fsrsError ? (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
@@ -278,7 +285,8 @@ export default function ReviewSessionClient({
           </div>
         ) : null}
 
-        <AppCard padding="md">
+        <LearningSurface>
+        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
           <div className="mb-4 flex flex-wrap gap-2">
             <span
               className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -294,25 +302,41 @@ export default function ReviewSessionClient({
               {q.topic}
             </span>
           </div>
-          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
-          <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-xs text-slate-500">你的答案</p>
+          <div className="space-y-2">
+            <SectionLabel kind="stem" />
+            <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
+          </div>
+          <div className="mt-4">
+            <SectionLabel kind="feedback" />
+            <div className="mt-2 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+            <div className="rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2">
+              <p className="text-xs text-slate-500">你選了 · Yours</p>
               <p className="font-mono font-semibold">{st.userChoice ?? "—"}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-xs text-slate-500">正解</p>
+            <div className="rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2">
+              <p className="text-xs text-slate-500">正解 · Correct</p>
               <p className="font-mono font-semibold text-emerald-700">{q.correctAnswer}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-xs text-slate-500">用時</p>
+            <div className="rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2">
+              <p className="text-xs text-slate-500">用時 · Time</p>
               <p className="font-semibold">{st.timeTakenSec?.toFixed(0) ?? "—"}s</p>
             </div>
           </div>
-          <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50 px-4 py-3">
-            <p className="text-xs font-semibold text-primary-800">解析 · Explanation</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-primary-950">{explanationText}</p>
           </div>
+          {ratingExpl.summary ? (
+            <p className="mt-4 max-w-prose text-sm leading-relaxed text-slate-800">
+              <span className="font-semibold text-slate-600">關鍵差別 · Key:</span> {ratingExpl.summary}
+            </p>
+          ) : null}
+          {ratingExpl.detail.trim().length > 0 ? (
+            <CollapsibleNote summaryZh="正解解釋（完整）" summaryEn="Full explanation" className="mt-3">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{ratingExpl.detail}</p>
+            </CollapsibleNote>
+          ) : !ratingExpl.summary && explanationText ? (
+            <CollapsibleNote summaryZh="解析 · Explanation" summaryEn="Why" className="mt-3">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{explanationText}</p>
+            </CollapsibleNote>
+          ) : null}
 
           <p className="mt-6 text-base font-semibold text-slate-900">這題對你來說有多難？</p>
           <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -332,6 +356,7 @@ export default function ReviewSessionClient({
             ))}
           </div>
         </AppCard>
+        </LearningSurface>
       </div>
     );
   }
@@ -346,48 +371,59 @@ export default function ReviewSessionClient({
 
   return (
     <div className="space-y-6">
-      <SessionHeader
-        mode="review"
-        current={safePos + 1}
-        total={n}
-        titleZh="FSRS 複習"
-        subtitleZh="混合主題"
-        topicOrModuleLabel={q.topic}
-        timer={{
-          active: timerActive && !pending,
-          totalSec: REVIEW_SECONDS_PER_QUESTION,
-          resetKey: `${sessionId}-${safePos}`,
-          onExpire: handleExpire,
-          tone: "violet",
-        }}
-      />
+      <LearningSurface>
+        <SessionHeader
+          mode="review"
+          current={safePos + 1}
+          total={n}
+          titleZh="FSRS 複習"
+          subtitleZh="混合主題"
+          topicOrModuleLabel={q.topic}
+          timer={{
+            active: timerActive && !pending,
+            totalSec: REVIEW_SECONDS_PER_QUESTION,
+            resetKey: `${sessionId}-${safePos}`,
+            onExpire: handleExpire,
+            tone: "violet",
+          }}
+        />
+      </LearningSurface>
 
-      <AppCard padding="md">
-        <div className="mb-3 flex flex-wrap gap-2">
-          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-            {q.topic}
-          </span>
-          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-            Lv {q.difficulty}
-          </span>
-        </div>
-        <p className="mb-4 whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {(["A", "B", "C", "D"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              disabled={pending || st.phase === "answered" || st.phase === "rated"}
-              onClick={() => handleChoice(k)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-left text-sm text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-40"
-            >
-              <span className="font-semibold text-primary-700">{k}.</span>{" "}
-              {k === "A" ? q.optionA : k === "B" ? q.optionB : k === "C" ? q.optionC : q.optionD}
-            </button>
-          ))}
-        </div>
-        {pending ? <p className="mt-3 text-xs text-slate-500">處理中…</p> : null}
-      </AppCard>
+      <LearningSurface>
+        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+              {q.topic}
+            </span>
+            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              Lv {q.difficulty}
+            </span>
+            <SectionLabel kind="timer" />
+          </div>
+          <div className="space-y-3">
+            <SectionLabel kind="stem" />
+            <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
+          </div>
+          <div className="mt-6 space-y-3">
+            <SectionLabel kind="options" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["A", "B", "C", "D"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  disabled={pending || st.phase === "answered" || st.phase === "rated"}
+                  onClick={() => handleChoice(k)}
+                  className="rounded-xl border border-slate-200/90 bg-slate-50/50 px-3 py-3 text-left text-sm leading-relaxed text-slate-800 shadow-sm hover:bg-white disabled:opacity-40"
+                >
+                  <span className="font-semibold text-primary-700">{k}.</span>{" "}
+                  {k === "A" ? q.optionA : k === "B" ? q.optionB : k === "C" ? q.optionC : q.optionD}
+                </button>
+              ))}
+            </div>
+          </div>
+          {pending ? <p className="mt-3 text-xs text-slate-500">處理中…</p> : null}
+        </AppCard>
+      </LearningSurface>
     </div>
   );
 }

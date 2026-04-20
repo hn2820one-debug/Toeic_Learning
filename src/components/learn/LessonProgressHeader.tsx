@@ -24,7 +24,7 @@ export default function LessonProgressHeader({
   const cardPct = cardCount > 0 ? ((cardIndex + 1) / cardCount) * 100 : 0;
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-3">
+    <div className="mx-auto w-full max-w-2xl space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-slate-500">
         <span className="font-medium text-slate-600">{topicLabel}</span>
         <span>

@@ -3,6 +3,7 @@ import { CheckCircle2, Clock } from "lucide-react";
 
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import AppCard from "@/components/ui/AppCard";
+import { LearningPageCanvas, LearningSurface, learningSectionGap } from "@/components/ui/learning-surface";
 import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getLearnDashboardData } from "@/lib/learn-dashboard";
@@ -35,7 +36,7 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
   const data = await getLearnDashboardData(searchParams);
 
   return (
-    <div>
+    <div className={learningSectionGap}>
       <BilingualHeading
         titleZh="今日學習"
         titleEn="Today's learning"
@@ -43,11 +44,15 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
         descriptionEn="Prioritized loop: review → test → practice → learn. Your closed-loop entry — no guessing from the legacy dashboard."
       />
 
+      <LearningSurface>
       {data.focusTopicKey ? (
-        <div className="mb-6 rounded-2xl border border-primary-200/80 bg-primary-50/90 px-4 py-3 text-sm text-primary-950 shadow-sm">
-          <p className="font-semibold">目前聚焦 · Focus</p>
-          <p className="mt-1 text-primary-900/90">{focusLabel(data.focusTopicKey)}</p>
-        </div>
+        <LearningPageCanvas className="mb-6 border-primary-200/40 bg-primary-50/50">
+          <span className="inline-flex rounded-lg bg-primary-100/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-900">
+            聚焦 · Focus
+          </span>
+          <p className="mt-3 text-sm font-semibold text-primary-950">目前進行主題</p>
+          <p className="mt-1 text-sm leading-relaxed text-primary-900/90">{focusLabel(data.focusTopicKey)}</p>
+        </LearningPageCanvas>
       ) : null}
 
       {!data.hasUser ? (
@@ -61,31 +66,33 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
         </AppCard>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/90 px-5 py-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-slate-900 p-2.5 text-white shadow-sm">
-            <Clock size={20} aria-hidden />
+      <LearningPageCanvas className="mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-slate-800/90 p-2.5 text-white shadow-sm">
+              <Clock size={20} aria-hidden />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">預估總時間 · Est. total</p>
+              <p className="text-lg font-bold text-slate-900">
+                {data.totalEstimatedMinutes > 0 ? (
+                  <>
+                    約 {data.totalEstimatedMinutes} 分鐘 · ~{data.totalEstimatedMinutes} min
+                  </>
+                ) : (
+                  <>— · No estimate</>
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">預估總時間 · Est. total</p>
-            <p className="text-lg font-bold text-slate-900">
-              {data.totalEstimatedMinutes > 0 ? (
-                <>
-                  約 {data.totalEstimatedMinutes} 分鐘 · ~{data.totalEstimatedMinutes} min
-                </>
-              ) : (
-                <>— · No estimate</>
-              )}
-            </p>
-          </div>
+          <Link
+            href="/training"
+            className="text-sm font-semibold text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+          >
+            仍可使用舊版每日訓練 · Legacy training
+          </Link>
         </div>
-        <Link
-          href="/training"
-          className="text-sm font-semibold text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-        >
-          仍可使用舊版每日訓練 · Legacy training
-        </Link>
-      </div>
+      </LearningPageCanvas>
 
       {data.tasks.length === 0 ? (
         <AppCard className="text-center">
@@ -118,9 +125,9 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
             const kind = KIND_LABEL[badge];
             return (
               <li key={`${task.type}-${task.topicKey ?? "fsrs"}-${i}`}>
-                <AppCard padding="md" className="border-slate-200/90 shadow-sm">
+                <AppCard padding="md" className="border-slate-200/80 bg-white/85 shadow-sm">
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0 flex-1 space-y-2">
+                    <div className="min-w-0 flex-1 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={`inline-flex rounded-lg px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white ${kind.badgeClass}`}
@@ -136,8 +143,8 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
                         <span className="mx-1.5 text-slate-300">·</span>
                         <span className="text-slate-500">{task.moduleTitleEn}</span>
                       </p>
-                      <p className="text-sm leading-relaxed text-slate-700">{task.reasonZh}</p>
-                      <p className="text-xs leading-relaxed text-slate-500">{task.reasonEn}</p>
+                      <p className="max-w-prose text-sm leading-relaxed text-slate-700">{task.reasonZh}</p>
+                      <p className="max-w-prose text-xs leading-relaxed text-slate-500">{task.reasonEn}</p>
                     </div>
                     <div className="shrink-0 md:pt-1">
                       <Link
@@ -154,6 +161,7 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
           })}
         </ul>
       )}
+      </LearningSurface>
     </div>
   );
 }

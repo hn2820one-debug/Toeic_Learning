@@ -19,7 +19,7 @@ export default function LessonCard({ eyebrow, title, children, tone = "neutral",
   return (
     <section
       className={clsx(
-        "mx-auto w-full max-w-xl rounded-2xl border px-5 py-6 shadow-sm md:px-7 md:py-8",
+        "mx-auto w-full max-w-2xl rounded-2xl border px-5 py-6 shadow-sm md:px-7 md:py-8",
         tone === "neutral" && "border-slate-200/90 bg-white",
         tone === "muted" && "border-slate-200/80 bg-slate-50/90",
         className,

@@ -113,6 +113,18 @@ export default async function TestPage({ searchParams }: TestPageProps) {
           <p className="font-semibold">主題 · Topic</p>
           <p className="mt-1">{PHASE1_TOPIC_LABELS[view.topicKey]}</p>
         </div>
+        <AppCard padding="md" className="mb-6 border-violet-200/70 bg-violet-50/50">
+          <p className="text-sm font-semibold text-violet-950">2 分鐘熱身（建議）</p>
+          <p className="mt-1 text-sm text-violet-900/90">
+            不影響驗收分數；先讓大腦進入狀態再開始限時測驗。可略過。
+          </p>
+          <Link
+            href={`/warmup?topicKey=${encodeURIComponent(view.topicKey)}&flow=test`}
+            className="mt-3 inline-flex rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-800"
+          >
+            前往熱身 · Warm-up first
+          </Link>
+        </AppCard>
         <AppCard padding="md">
           {view.resumeCandidate ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">

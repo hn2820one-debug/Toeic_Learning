@@ -43,6 +43,8 @@ enum LearningSessionMode {
   test
   review
   mixed
+  /// Short activation quiz before main flow; does not affect mastery or checkpoint pass.
+  warmup
 }
 
 enum LearningSessionStatus {

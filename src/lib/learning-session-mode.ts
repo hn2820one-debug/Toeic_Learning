@@ -6,7 +6,7 @@
  */
 import { LearningSessionMode } from "../../generated/prisma";
 
-export const LEARNING_SESSION_MODES = ["learn", "practice", "test", "review", "mixed"] as const;
+export const LEARNING_SESSION_MODES = ["learn", "practice", "test", "review", "mixed", "warmup"] as const;
 
 export type LearningSessionModeLiteral = (typeof LEARNING_SESSION_MODES)[number];
 

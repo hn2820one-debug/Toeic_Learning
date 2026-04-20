@@ -184,6 +184,17 @@ export default function LearnTopicClient({
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">LEARN · 例句優先 · 一屏一步</p>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">{topicLabel}</h1>
+            {hasUser ? (
+              <p className="mt-2 text-sm text-slate-600">
+                <Link
+                  href={`/warmup?topicKey=${encodeURIComponent(topicKey)}&flow=learn`}
+                  className="font-semibold text-primary-700 underline underline-offset-4 hover:text-primary-900"
+                >
+                  先做 2 分鐘熱身（建議）
+                </Link>
+                <span className="text-slate-500"> · 不計分，只啟動大腦</span>
+              </p>
+            ) : null}
           </div>
           {!hasUser ? (
             <p className="max-w-sm text-right text-xs text-amber-800">

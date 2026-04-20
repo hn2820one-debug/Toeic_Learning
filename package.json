@@ -24,7 +24,9 @@
     "taxonomy:backfill": "tsx scripts/backfill-taxonomy.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate:lessons": "tsx scripts/generate-lessons.ts"
+    "generate:lessons": "tsx scripts/generate-lessons.ts",
+    "qa:lessons": "tsx scripts/qa-lessons.ts",
+    "qa:hints": "tsx scripts/qa-hints.ts"
   },
   "keywords": [],
   "author": "",

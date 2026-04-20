@@ -1,0 +1,231 @@
+import type { Phase1SkillDefinition, Phase1TopicKey } from "./types";
+
+export const PHASE1_TOPIC_LABELS: Record<Phase1TopicKey, string> = {
+  office: "文書作業 / Office Admin",
+  notices: "公告訊息 / Announcements",
+  meetings: "商務會議 / Business Meetings",
+  coordination: "業務協調 / Coordination",
+  hr: "人事與招募 / HR & Recruitment",
+  finance: "財務會計 / Finance & Accounting",
+  operations: "企業經營 / Business Operations",
+  marketing: "行銷與宣傳 / Marketing & Sales",
+  logistics: "貿易物流 / Trade & Logistics",
+  tech: "科技系統 / Technology & Systems",
+  communication: "溝通表達 / Communication",
+  healthEnv: "醫療環境 / Health & Environment",
+  daily: "日常生活 / Daily Life & Travel",
+};
+
+export const PHASE1_SKILLS: Phase1SkillDefinition[] = [
+  {
+    skillKey: "vocabulary.document-workflow",
+    titleZh: "文件流程字彙",
+    titleEn: "Document workflow vocabulary",
+    summaryZh: "聚焦文件、交件、審閱、流程交接等高頻 TOEIC 工作字彙。",
+    summaryEn: "Focuses on the high-frequency workplace vocabulary used in documents, handoffs, review, and process execution.",
+    matcher: {
+      category: "Vocabulary",
+      topicKeys: ["office", "coordination", "operations"],
+      subFocusLabels: ["片語動詞 / Phrasal verbs", "固定搭配 / Fixed expressions"],
+      preferredDifficulties: ["A", "B"],
+    },
+    instructionalGoal: "Help the learner move from literal word matching to action-oriented business language.",
+    currentDataRisk: [
+      "Manual create/edit does not preserve category or sub-focus today.",
+      "JSON import cannot set `notes`, so these questions would be invisible to skill-based routing unless normalized later.",
+    ],
+  },
+  {
+    skillKey: "vocabulary.formal-register",
+    titleZh: "正式書面與商務搭配",
+    titleEn: "Formal register and business collocations",
+    summaryZh: "聚焦正式信件、公告、彙報與商務搭配，支援 lesson 與 checkpoint 的 written-English 訓練。",
+    summaryEn: "Targets formal written English, announcement language, and high-value collocations for lesson and checkpoint work.",
+    matcher: {
+      category: "Vocabulary",
+      topicKeys: ["office", "meetings", "finance", "communication"],
+      subFocusLabels: ["正式書面語 / Formal register", "商務搭配 / Business collocation"],
+      preferredDifficulties: ["B", "C"],
+    },
+    instructionalGoal: "Train the learner to recognize which option sounds professionally natural, not just dictionary-correct.",
+    currentDataRisk: [
+      "CSV import writes raw `grammarPoints` into `notes`, which may bypass the canonical category label format.",
+      "Current session composition does not use vocabulary sub-focus for selection.",
+    ],
+  },
+  {
+    skillKey: "vocabulary.domain-and-abstract-meaning",
+    titleZh: "領域字彙與抽象義",
+    titleEn: "Domain vocabulary and abstract meaning",
+    summaryZh: "針對科技、財務、醫療與抽象概念字義，補足非日常、較難憑直覺作答的字彙缺口。",
+    summaryEn: "Covers technology, finance, health, and abstract meaning where intuition alone is usually not enough.",
+    matcher: {
+      category: "Vocabulary",
+      topicKeys: ["finance", "tech", "healthEnv", "daily"],
+      subFocusLabels: ["領域字彙 / Domain vocabulary", "抽象字義 / Abstract meaning"],
+      preferredDifficulties: ["B", "C"],
+    },
+    instructionalGoal: "Expand the learner's usable vocabulary beyond safe office basics into low-frequency but test-relevant meaning choices.",
+    currentDataRisk: [
+      "The current bank can classify these through seed data, but ad-hoc imports may dilute the distinction if taxonomy is not normalized.",
+    ],
+  },
+  {
+    skillKey: "grammar.verb-control",
+    titleZh: "動詞控制",
+    titleEn: "Verb control",
+    summaryZh: "整合動詞時態、被動語態、主詞動詞一致，作為 Phase 1 文法核心。",
+    summaryEn: "Combines tense, passive voice, and subject-verb agreement as the grammar backbone of Phase 1.",
+    matcher: {
+      category: "Grammar",
+      topicKeys: ["office", "meetings", "coordination", "finance", "operations"],
+      subFocusLabels: [
+        "動詞時態 / Verb tense",
+        "被動語態 / Passive voice",
+        "主詞動詞一致 / Subject-Verb Agreement",
+      ],
+      preferredDifficulties: ["A", "B"],
+    },
+    instructionalGoal: "Shift the learner from sentence-by-sentence guessing to explicit control of time, voice, and agreement.",
+    currentDataRisk: [
+      "Current dashboard grammar analytics read `notes`, but training selection does not yet use grammar skill buckets directly.",
+    ],
+  },
+  {
+    skillKey: "grammar.pattern-control",
+    titleZh: "句型搭配控制",
+    titleEn: "Pattern control",
+    summaryZh: "聚焦動名詞 vs. 不定詞、介系詞與固定搭配，改善常見“看懂但選錯形式”的問題。",
+    summaryEn: "Targets gerund vs. infinitive and preposition/pattern errors where learners understand meaning but choose the wrong form.",
+    matcher: {
+      category: "Grammar",
+      topicKeys: ["office", "coordination", "finance", "communication"],
+      subFocusLabels: [
+        "動名詞與不定詞 / Gerund vs. Infinitive",
+        "介系詞與固定搭配 / Prepositions & patterns",
+      ],
+      preferredDifficulties: ["A", "B"],
+    },
+    instructionalGoal: "Make the learner notice the verb pattern or preposition frame before evaluating meaning.",
+    currentDataRisk: [
+      "Manual question entry cannot currently capture this sub-focus without additional fields or normalization helpers.",
+    ],
+  },
+  {
+    skillKey: "grammar.sentence-linking",
+    titleZh: "句子連接與修飾",
+    titleEn: "Sentence linking and modifiers",
+    summaryZh: "聚焦關係子句、連接詞邏輯、used to 系列與分詞修飾，幫助處理較長句。",
+    summaryEn: "Focuses on relative clauses, conjunction logic, used-to patterns, and participles to make longer sentences manageable.",
+    matcher: {
+      category: "Grammar",
+      topicKeys: ["notices", "meetings", "operations", "communication"],
+      subFocusLabels: [
+        "關係子句 / Relative clauses",
+        "連接詞與邏輯 / Conjunctions & logic",
+        "used to 系列 / Used to family",
+        "分詞修飾 / Participles",
+      ],
+      preferredDifficulties: ["B", "C"],
+    },
+    instructionalGoal: "Teach the learner how clauses and modifiers change sentence logic before answer selection.",
+    currentDataRisk: [
+      "JSON import today cannot preserve these labels, which would make new grammar content invisible to module assignment.",
+    ],
+  },
+  {
+    skillKey: "reading.detail-retrieval",
+    titleZh: "細節擷取",
+    titleEn: "Detail retrieval",
+    summaryZh: "聚焦 email、notice、meeting、HR、finance、logistics 等短文細節擷取。",
+    summaryEn: "Targets detail retrieval across email, notices, meetings, HR, finance, and logistics reading snippets.",
+    matcher: {
+      category: "Reading",
+      topicKeys: ["office", "notices", "meetings", "coordination", "hr", "finance", "logistics", "marketing", "tech"],
+      subFocusLabels: [
+        "電子郵件細節 / Email detail",
+        "會議細節 / Meeting detail",
+        "人事規則細節 / HR detail",
+        "財務規則細節 / Finance detail",
+        "物流細節 / Logistics detail",
+        "行銷流程細節 / Marketing detail",
+        "技術報告細節 / Technical detail",
+        "文件細節 / Short document detail",
+        "政策細節 / Policy detail",
+        "技術事故細節 / Incident detail",
+      ],
+      preferredDifficulties: ["A", "B"],
+    },
+    instructionalGoal: "Build the habit of anchoring every answer to an explicit detail in the text.",
+    currentDataRisk: [
+      "Question routing currently uses topic and review status, but not reading skill family.",
+    ],
+  },
+  {
+    skillKey: "reading.purpose-and-intent",
+    titleZh: "目的與意圖判讀",
+    titleEn: "Purpose and intent",
+    summaryZh: "聚焦公告目的、電子郵件目的、寫信者 / 說話者意圖等題型。",
+    summaryEn: "Targets purpose and intent questions such as notice purpose, email purpose, and writer intention.",
+    matcher: {
+      category: "Reading",
+      topicKeys: ["notices", "communication", "daily", "operations"],
+      subFocusLabels: [
+        "公告目的 / Notice purpose",
+        "電子郵件目的 / Email purpose",
+        "說話者意圖 / Writer intent",
+        "寫信者意圖 / Writer intent",
+        "制度變更目的 / Process change purpose",
+        "目的判斷 / Purpose",
+      ],
+      preferredDifficulties: ["B", "C"],
+    },
+    instructionalGoal: "Teach the learner to infer communicative purpose from tone, request type, and document context.",
+    currentDataRisk: [
+      "Two closely related labels exist for writer intent; they should stay grouped at the skill layer even if source text differs.",
+    ],
+  },
+  {
+    skillKey: "reading.inference-and-process-logic",
+    titleZh: "推論與流程邏輯",
+    titleEn: "Inference and process logic",
+    summaryZh: "聚焦公告推論、流程推論、結果推論、原因推論與決策類推理。",
+    summaryEn: "Covers notice, process, outcome, and cause inference for multi-step reasoning and business logic questions.",
+    matcher: {
+      category: "Reading",
+      topicKeys: ["notices", "coordination", "operations", "finance", "logistics", "communication"],
+      subFocusLabels: [
+        "公告推論 / Notice inference",
+        "流程推論 / Process inference",
+        "結果推論 / Outcome inference",
+        "原因推論 / Cause inference",
+        "推論 / Inference",
+        "客訴原因 / Complaint reason",
+      ],
+      preferredDifficulties: ["B", "C"],
+    },
+    instructionalGoal: "Help the learner connect evidence, sequence, and consequence instead of reading each sentence in isolation.",
+    currentDataRisk: [
+      "Current reports can show weak topics, but not yet a dedicated inference skill score or remediation route.",
+    ],
+  },
+  {
+    skillKey: "reading.contextual-meaning",
+    titleZh: "語境字義判讀",
+    titleEn: "Contextual meaning",
+    summaryZh: "以閱讀短文中的語境字義判讀為主，補足只背單字表而不懂語境的弱點。",
+    summaryEn: "Targets meaning-in-context questions so vocabulary is learned through reading evidence, not isolated memorization.",
+    matcher: {
+      category: "Reading",
+      topicKeys: ["office", "meetings", "communication", "daily"],
+      subFocusLabels: ["語境字義 / Vocabulary in context"],
+      preferredDifficulties: ["B", "C"],
+    },
+    instructionalGoal: "Teach the learner to resolve word meaning from surrounding clues and business context.",
+    currentDataRisk: [
+      "This reading skill overlaps with vocabulary gaps, so the closed-loop system should track both reading performance and word-level remediation.",
+    ],
+  },
+];
+
+export const PHASE1_SKILL_KEYS = PHASE1_SKILLS.map((skill) => skill.skillKey);

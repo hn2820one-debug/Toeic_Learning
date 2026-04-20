@@ -8,8 +8,10 @@
 
 **Major workflows today:**
 
+- Use **Today's learning** (`/learn`) as the **closed-loop entry**: tasks are ranked **review → test → practice → new topic**, aligned with the home “next action” and `/progress` CTAs.
+- Open a **topic learn** page (`/learn/[topicId]`): read **Markdown lesson segments** (understanding-first: **no timer, no score**). Mark segments as understood; when the LEARN stage is complete, the UI points you to **topic practice** (`/practice`).
 - Browse and manage questions; import batches (JSON or CSV); optionally rebuild the **personalized Phase 1 bank** from seed data.
-- Start **training**: questions are drawn from `QuestionBankItem`, answers and FSRS/ELO updates are persisted.
+- Start **daily training** (`/training`): questions are drawn from `QuestionBankItem`, answers and FSRS/ELO updates are persisted (the classic bank session, distinct from topic-scoped practice).
 - Review **history** and a rolling **7-day report** (with optional Gemini-powered weekly copy if configured).
 - **Export** questions, history, or a full DB backup over HTTP (with localhost or shared-secret protection).
 
@@ -17,7 +19,10 @@
 
 ## 2. Current core features
 
-- **Dashboard:** Summary stats (e.g. bank size, due reviews, recent activity), grammar/topic-oriented widgets where data exists. Bilingual UI labels (Chinese + English) on main pages.
+- **Dashboard (`/`):** Summary stats (e.g. bank size, due reviews, recent activity), grammar/topic-oriented widgets where data exists. **Next action** uses the same ranked task list as `/learn`. Bilingual UI labels (Chinese + English) on main pages.
+- **Today's learning (`/learn`):** Phase 1 **closed-loop** task list (badges: review / test / practice / learn) with links into **topic learn**, **practice**, **test**, and **review** routes as appropriate.
+- **Topic learn (`/learn/[topicId]`):** Renders persisted **`lessons`** rows (Markdown bodies via `SafeMarkdown`). Progress is stored in learner JSON (`learnProgress`); completing LEARN unlocks the practice CTA. If a topic has **no lessons**, an admin/dev runs `npm run generate:lessons` (see **`docs/lesson-generation-runbook.md`**).
+- **Mastery map (`/progress`):** Phase 1 modules and per-topic stages; hrefs match the learning-path engine used by `/` and `/learn`.
 - **Question bank:** List, filter, and search by text, topic, and difficulty; search also matches **`notes`** (classification strings).
 - **Create / edit / delete:** `/questions/new` and `/questions/[id]/edit` with validation; delete is guarded by usage rules.
 - **JSON import:** `/import` — paste or upload fixed-shape JSON; validates, normalizes, skips duplicates.
@@ -103,6 +108,8 @@ Uses Next’s default (**port 3000** unless `PORT` is set). Do not assume 5173 f
 - **`npm run smoke:csv-import`** — end-to-end CSV import smoke (server conditions); inserts and removes tagged rows.
 - **`npm run test:llm-env`** — verifies LLM env readers resolve (no network call).
 - **`npm run test:fsrs`** / **`npm run elo:decay`** — maintenance/verification utilities as needed.
+- **`npm run generate:lessons`** — batch-generate Phase 1 topic Markdown lessons into the DB (`scripts/generate-lessons.ts`; requires LLM keys where the generator calls out).
+- **`npm run qa:lessons`** / **`npm run qa:hints`** — optional QA passes over generated lesson/hint content.
 
 ### Prisma client
 
@@ -188,6 +195,7 @@ Behavior is implemented in `src/lib/export/auth.ts` (localhost vs shared secret)
 
 - **LLM** features need keys, network, and provider quotas; costs accrue per `LlmUsageLog` semantics.
 - **Listening** tables are **not** driving the main training UI yet.
+- **Topic learn** pages show **no lessons** until rows exist in the DB (content is not generated on page load); use the lesson generation script or your own pipeline.
 - **Legacy tables** remain in SQLite for compatibility; some are unused by current pages.
 
 **Development:**
@@ -212,9 +220,11 @@ Behavior is implemented in `src/lib/export/auth.ts` (localhost vs shared secret)
 
 Operational docs:
 
+- `docs/Operator-WI.md` — bilingual **operator / non-developer** guide (navigation, day-to-day use, what not to do).
 - `docs/reliability-runbook.md`
 - `docs/backup-and-restore.md`
 - `docs/performance-watchpoints.md`
+- `docs/lesson-generation-runbook.md` — generating topic lessons for `/learn/[topicId]`.
 
 ---
 
@@ -240,11 +250,13 @@ If the error mentions **`Cannot read properties of undefined (reading 'findMany'
 
 With `npm run dev`:
 
-1. `/questions/new` — create one question.
-2. `/questions/[id]/edit` — edit and save.
-3. `/import` — CSV: choose file → Preview → Commit (or JSON section as offered).
-4. `/training` — complete a short session.
-5. `/history` — confirm the session appears.
+1. `/learn` — task list loads; open a topic link if present.
+2. `/learn/<topicKey>` — lesson Markdown renders; segment navigation works (optional: run `npm run generate:lessons -- --topic=<topicKey>` first if empty).
+3. `/questions/new` — create one question.
+4. `/questions/[id]/edit` — edit and save.
+5. `/import` — CSV: choose file → Preview → Commit (or JSON section as offered).
+6. `/training` — complete a short session.
+7. `/history` — confirm the session appears.
 
 ---
 

@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  generateWeeklyCoachingReport,
-  getWeeklyCoachingReportMetricsSummary,
-  WeeklyReportGenerationError,
-} from "@/lib/llm/weekly-report";
+import { generateWeeklyCoachingReport, getWeeklyCoachingReportMetricsSummary } from "@/lib/llm/weekly-report";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +17,7 @@ export async function GET() {
         ok: true,
         rawMetricsSummary: metricsSummary,
         generatedReportText: result.generatedReportText,
+        fallbackUsed: result.fallbackUsed,
         model: result.callResult.model,
         promptVersion: result.promptVersion,
         usage: {
@@ -38,23 +35,6 @@ export async function GET() {
       },
     );
   } catch (error) {
-    if (error instanceof WeeklyReportGenerationError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-          rawMetricsSummary: metricsSummary,
-          generatedReportText: null,
-        },
-        {
-          status: error.status,
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        },
-      );
-    }
-
     const message = error instanceof Error ? error.message : "Unknown error.";
     return NextResponse.json(
       {
@@ -62,6 +42,7 @@ export async function GET() {
         error: message,
         rawMetricsSummary: metricsSummary,
         generatedReportText: null,
+        fallbackUsed: null,
       },
       {
         status: 500,

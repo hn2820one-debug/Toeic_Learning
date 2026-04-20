@@ -7,22 +7,26 @@ type WeeklyReportRouteResponse =
       ok: true;
       rawMetricsSummary: unknown;
       generatedReportText: string;
+      fallbackUsed?: boolean;
     }
   | {
       ok: false;
       error: string;
-      rawMetricsSummary: null;
+      rawMetricsSummary: unknown;
       generatedReportText: null;
+      fallbackUsed: null;
     };
 
 export default function AiWeeklyCoachingReport() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
+  const [usedOfflineFallback, setUsedOfflineFallback] = useState(false);
 
   async function handleGenerateReport() {
     setIsLoading(true);
     setError(null);
+    setUsedOfflineFallback(false);
 
     try {
       const response = await fetch("/api/llm/weekly-report", {
@@ -38,6 +42,7 @@ export default function AiWeeklyCoachingReport() {
       }
 
       setGeneratedReport(payload.generatedReportText);
+      setUsedOfflineFallback(!!payload.fallbackUsed);
     } catch (requestError) {
       setGeneratedReport(null);
       setError(requestError instanceof Error ? requestError.message : "AI weekly report request failed.");
@@ -73,6 +78,11 @@ export default function AiWeeklyCoachingReport() {
 
       {generatedReport ? (
         <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-4">
+          {usedOfflineFallback ? (
+            <p className="text-xs text-violet-800/90 mb-2">
+              Showing deterministic coaching template (Gemini unavailable or output did not pass Markdown contract).
+            </p>
+          ) : null}
           <p className="whitespace-pre-line text-sm leading-7 text-violet-950">{generatedReport}</p>
         </div>
       ) : null}

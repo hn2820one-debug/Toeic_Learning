@@ -3,22 +3,16 @@ import "server-only";
 import { getWeeklyReportData, getWeeklyReportWindow } from "@/lib/report";
 import { prisma } from "@/lib/prisma";
 
-import { getGoogleApiKey } from "./providers";
+import { TASK_PROMPT_VERSIONS, safeParseWeeklyCoachingMarkdown } from "./contracts";
+import { buildDeterministicWeeklyCoachingReport } from "./deterministic-fallbacks";
 import type { LlmCallResult } from "./types";
 import { logLlmUsage } from "./usage-log";
 
 export const GEMINI_WEEKLY_REPORT_MODEL = "gemini-2.5-pro";
-export const WEEKLY_COACHING_REPORT_PROMPT_VERSION = "weekly-coaching-report-v1";
+export const WEEKLY_COACHING_REPORT_PROMPT_VERSION = TASK_PROMPT_VERSIONS.weeklyCoachingReport;
 
 const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_TEMPERATURE = 0.5;
-const REQUIRED_WEEKLY_REPORT_HEADINGS = [
-  "## 📈 本週進展",
-  "## 🎯 3 個弱點",
-  "## 🧮 TOEIC 估分",
-  "## 🗓️ 下週 3 個行動項",
-  "## 🔥 Productive-failure 鼓勵",
-] as const;
 
 type GeminiUsageMetadata = {
   promptTokenCount?: number;
@@ -77,9 +71,11 @@ type WeeklyReportContext = {
 export type GenerateWeeklyCoachingReportResult = {
   metricsSummary: WeeklyReportContext;
   generatedReportText: string;
-  rawResponse: GeminiGenerateContentResponse;
+  rawResponse?: GeminiGenerateContentResponse;
   promptVersion: string;
   callResult: LlmCallResult;
+  /** True when Gemini was skipped, failed, or output failed Markdown contract validation. */
+  fallbackUsed: boolean;
 };
 
 export class WeeklyReportGenerationError extends Error {
@@ -166,18 +162,6 @@ function extractUsageMetadata(response: GeminiGenerateContentResponse | undefine
     cachedTokens: response?.usageMetadata?.cachedContentTokenCount ?? 0,
     cacheWriteTokens: 0,
   };
-}
-
-function validateWeeklyReportText(rawText: string) {
-  for (const heading of REQUIRED_WEEKLY_REPORT_HEADINGS) {
-    if (!rawText.includes(heading)) {
-      throw new Error(`Gemini weekly report is missing required heading: ${heading}`);
-    }
-  }
-
-  if (!rawText.includes("粗略估計，非官方預測")) {
-    throw new Error("Gemini weekly report must explicitly include '粗略估計，非官方預測'.");
-  }
 }
 
 export async function getWeeklyCoachingReportMetricsSummary(now = new Date()): Promise<WeeklyReportContext> {
@@ -301,13 +285,69 @@ export async function generateWeeklyCoachingReport(
   const context = input?.metricsSummary ?? (await getWeeklyCoachingReportMetricsSummary(input?.now));
   const model = GEMINI_WEEKLY_REPORT_MODEL;
 
+  const fallbackBody = buildDeterministicWeeklyCoachingReport(context);
+
+  async function finishWithFallback(
+    reason: string,
+    rawResponse: GeminiGenerateContentResponse | undefined,
+    rawText: string,
+    responseModel: string,
+    usage: ReturnType<typeof extractUsageMetadata>,
+  ): Promise<GenerateWeeklyCoachingReportResult> {
+    const latencyMs = Date.now() - startedAt;
+    const callResult = createCallResult({
+      success: false,
+      text: rawText,
+      model: responseModel,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      cachedTokens: usage.cachedTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      latencyMs,
+      errorMessage: reason,
+    });
+
+    await logLlmUsage({
+      taskType: "weekly_report",
+      provider: "google",
+      model: responseModel,
+      promptVersion,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      cachedTokens: usage.cachedTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+      costUsd: 0,
+      latencyMs,
+      success: false,
+      errorMessage: reason,
+      temperature,
+    });
+
+    return {
+      metricsSummary: context,
+      generatedReportText: fallbackBody,
+      rawResponse,
+      promptVersion,
+      callResult,
+      fallbackUsed: true,
+    };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) {
+    return await finishWithFallback("GEMINI_API_KEY is not set.", undefined, "", model, {
+      promptTokens: 0,
+      completionTokens: 0,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
+    });
+  }
+
   let rawResponse: GeminiGenerateContentResponse | undefined;
   let rawText = "";
   let responseModel = model;
-  let errorMessage: string | undefined;
 
   try {
-    const apiKey = getGoogleApiKey();
     const { systemPrompt, userPrompt } = buildWeeklyReportPrompts(context);
     const response = await fetch(`${GEMINI_API_BASE_URL}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
@@ -337,25 +377,32 @@ export async function generateWeeklyCoachingReport(
     try {
       rawResponse = responseText.trim() ? (JSON.parse(responseText) as GeminiGenerateContentResponse) : {};
     } catch {
-      throw new Error(`Gemini returned a non-JSON HTTP body: ${responseText.slice(0, 200)}`);
+      const msg = `Gemini returned a non-JSON HTTP body: ${responseText.slice(0, 200)}`;
+      return await finishWithFallback(msg, undefined, "", model, { promptTokens: 0, completionTokens: 0, cachedTokens: 0, cacheWriteTokens: 0 });
     }
 
     responseModel = rawResponse.modelVersion ?? model;
+    const usage = extractUsageMetadata(rawResponse);
 
     if (!response.ok) {
-      throw new WeeklyReportGenerationError(getGeminiApiErrorMessage(response.status, rawResponse), {
-        status: response.status,
-        rawResponse,
-      });
+      return await finishWithFallback(getGeminiApiErrorMessage(response.status, rawResponse), rawResponse, "", responseModel, usage);
     }
 
-    rawText = extractGeminiText(rawResponse);
-    validateWeeklyReportText(rawText);
-    const usage = extractUsageMetadata(rawResponse);
+    try {
+      rawText = extractGeminiText(rawResponse);
+    } catch (emptyErr) {
+      return await finishWithFallback(getErrorMessage(emptyErr), rawResponse, "", responseModel, usage);
+    }
+
+    const validated = safeParseWeeklyCoachingMarkdown(rawText);
+    if (!validated.ok) {
+      return await finishWithFallback(`Weekly report markdown contract failed: ${validated.error}`, rawResponse, rawText, responseModel, usage);
+    }
+
     const latencyMs = Date.now() - startedAt;
     const callResult = createCallResult({
       success: true,
-      text: rawText,
+      text: validated.data,
       model: responseModel,
       promptTokens: usage.promptTokens,
       completionTokens: usage.completionTokens,
@@ -381,55 +428,14 @@ export async function generateWeeklyCoachingReport(
 
     return {
       metricsSummary: context,
-      generatedReportText: rawText,
+      generatedReportText: validated.data,
       rawResponse,
       promptVersion,
       callResult,
+      fallbackUsed: false,
     };
   } catch (error) {
-    errorMessage = getErrorMessage(error);
     const usage = extractUsageMetadata(rawResponse);
-    const latencyMs = Date.now() - startedAt;
-    const callResult = createCallResult({
-      success: false,
-      text: rawText,
-      model: responseModel,
-      promptTokens: usage.promptTokens,
-      completionTokens: usage.completionTokens,
-      cachedTokens: usage.cachedTokens,
-      cacheWriteTokens: usage.cacheWriteTokens,
-      latencyMs,
-      errorMessage,
-    });
-
-    await logLlmUsage({
-      taskType: "weekly_report",
-      provider: "google",
-      model: responseModel,
-      promptVersion,
-      promptTokens: usage.promptTokens,
-      completionTokens: usage.completionTokens,
-      cachedTokens: usage.cachedTokens,
-      cacheWriteTokens: usage.cacheWriteTokens,
-      costUsd: 0,
-      latencyMs,
-      success: false,
-      errorMessage,
-      temperature,
-    });
-
-    if (error instanceof WeeklyReportGenerationError) {
-      error.callResult = error.callResult ?? callResult;
-      error.rawResponse = error.rawResponse ?? rawResponse;
-      error.rawText = error.rawText ?? rawText;
-      throw error;
-    }
-
-    throw new WeeklyReportGenerationError(errorMessage, {
-      status: 500,
-      rawResponse,
-      rawText,
-      callResult,
-    });
+    return await finishWithFallback(getErrorMessage(error), rawResponse, rawText, responseModel, usage);
   }
 }

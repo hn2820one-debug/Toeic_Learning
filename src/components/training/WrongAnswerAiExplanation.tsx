@@ -22,6 +22,7 @@ type ExplainWrongAnswerResponse =
   | {
       ok: true;
       explanationText: string;
+      fallbackUsed?: boolean;
     }
   | {
       ok: false;
@@ -32,10 +33,12 @@ export default function WrongAnswerAiExplanation(props: WrongAnswerAiExplanation
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [explanation, setExplanation] = useState<string | null>(null);
+  const [usedOfflineFallback, setUsedOfflineFallback] = useState(false);
 
   async function handleGenerateExplanation() {
     setIsLoading(true);
     setError(null);
+    setUsedOfflineFallback(false);
 
     try {
       const response = await fetch("/api/llm/explain-wrong-answer", {
@@ -64,6 +67,7 @@ export default function WrongAnswerAiExplanation(props: WrongAnswerAiExplanation
       }
 
       setExplanation(payload.explanationText);
+      setUsedOfflineFallback(!!payload.fallbackUsed);
     } catch (requestError) {
       setExplanation(null);
       setError(requestError instanceof Error ? requestError.message : "AI explanation request failed.");
@@ -93,6 +97,9 @@ export default function WrongAnswerAiExplanation(props: WrongAnswerAiExplanation
       {explanation ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-4">
           <p className="text-sm font-medium text-violet-900 mb-2">AI Explanation</p>
+          {usedOfflineFallback ? (
+            <p className="text-xs text-violet-700/80 mb-2">Showing offline fallback copy (LLM unavailable or output did not pass validation).</p>
+          ) : null}
           <p className="whitespace-pre-line text-sm leading-7 text-violet-900">{explanation}</p>
         </div>
       ) : null}

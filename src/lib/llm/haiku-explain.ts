@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getAnthropicApiKey } from "./providers";
+import { TASK_PROMPT_VERSIONS, safeParseWrongAnswerExplanationText } from "./contracts";
+import { buildWrongAnswerExplanationFallback } from "./deterministic-fallbacks";
 import type { LlmCallResult } from "./types";
 import { logLlmUsage } from "./usage-log";
 
@@ -9,6 +10,11 @@ const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_TEMPERATURE = 0.4;
 const SIMPLIFIED_CHINESE_REGEX =
   /[这们为么应开关问题项验仅体并从业发后会说话种还过这边进远关复杂级简难点样门报读写错]/;
+
+export type WrongAnswerExplanationResult = {
+  explanationText: string;
+  fallbackUsed: boolean;
+};
 
 export type WrongAnswerExplanationInput = {
   stem: string;
@@ -106,31 +112,6 @@ function extractClaudeText(response: AnthropicMessageResponse) {
   return rawText;
 }
 
-function createCallResult(input: {
-  success: boolean;
-  text: string;
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-  cachedTokens: number;
-  cacheWriteTokens: number;
-  latencyMs: number;
-  errorMessage?: string;
-}): LlmCallResult {
-  return {
-    success: input.success,
-    text: input.text,
-    model: input.model,
-    provider: "anthropic",
-    promptTokens: input.promptTokens,
-    completionTokens: input.completionTokens,
-    cachedTokens: input.cachedTokens,
-    cacheWriteTokens: input.cacheWriteTokens,
-    latencyMs: input.latencyMs,
-    errorMessage: input.errorMessage,
-  };
-}
-
 function buildSystemPrompt(retryForTraditionalChinese: boolean) {
   return `
 你是 TOEIC 英文老師。
@@ -183,8 +164,8 @@ function getUsageNumbers(response: AnthropicMessageResponse | undefined) {
 async function callAnthropicForExplanation(
   input: WrongAnswerExplanationInput,
   retryForTraditionalChinese: boolean,
+  apiKey: string,
 ) {
-  const apiKey = getAnthropicApiKey();
   const response = await fetch(ANTHROPIC_API_URL, {
     method: "POST",
     headers: {
@@ -229,13 +210,36 @@ async function callAnthropicForExplanation(
   };
 }
 
-export async function generateWrongAnswerExplanation(input: WrongAnswerExplanationInput): Promise<string> {
+export async function generateWrongAnswerExplanation(input: WrongAnswerExplanationInput): Promise<WrongAnswerExplanationResult> {
   const startedAt = Date.now();
-  const promptVersion = "wrong-answer-explain-v1";
+  const promptVersion = TASK_PROMPT_VERSIONS.wrongAnswerExplain;
   const temperature = input.temperature ?? DEFAULT_TEMPERATURE;
 
   if (input.userChoice === input.correctAnswer) {
     throw new Error("Wrong-answer explanation requires userChoice to be different from correctAnswer.");
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) {
+    const latencyMs = Date.now() - startedAt;
+    await logLlmUsage({
+      taskType: "explain",
+      provider: "anthropic",
+      model: CLAUDE_HAIKU_WRONG_ANSWER_MODEL,
+      promptVersion,
+      promptTokens: 0,
+      completionTokens: 0,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: 0,
+      latencyMs,
+      success: false,
+      errorMessage: "ANTHROPIC_API_KEY is not set.",
+      questionId: input.questionId,
+      sessionId: input.sessionId,
+      temperature,
+    });
+    return { explanationText: buildWrongAnswerExplanationFallback(input), fallbackUsed: true };
   }
 
   let promptTokens = 0;
@@ -243,12 +247,10 @@ export async function generateWrongAnswerExplanation(input: WrongAnswerExplanati
   let cachedTokens = 0;
   let cacheWriteTokens = 0;
   let lastModel = CLAUDE_HAIKU_WRONG_ANSWER_MODEL;
-  let lastRawText = "";
-  let lastRawResponse: AnthropicMessageResponse | undefined;
 
   try {
     for (const retryForTraditionalChinese of [false, true]) {
-      const attempt = await callAnthropicForExplanation(input, retryForTraditionalChinese);
+      const attempt = await callAnthropicForExplanation(input, retryForTraditionalChinese, apiKey);
       const usage = getUsageNumbers(attempt.rawResponse);
 
       promptTokens += usage.promptTokens;
@@ -256,10 +258,13 @@ export async function generateWrongAnswerExplanation(input: WrongAnswerExplanati
       cachedTokens += usage.cachedTokens;
       cacheWriteTokens += usage.cacheWriteTokens;
       lastModel = attempt.model;
-      lastRawText = attempt.rawText;
-      lastRawResponse = attempt.rawResponse;
 
-      if (!containsSimplifiedChinese(attempt.rawText)) {
+      if (containsSimplifiedChinese(attempt.rawText)) {
+        continue;
+      }
+
+      const validated = safeParseWrongAnswerExplanationText(attempt.rawText);
+      if (validated.ok) {
         const latencyMs = Date.now() - startedAt;
 
         await logLlmUsage({
@@ -279,29 +284,52 @@ export async function generateWrongAnswerExplanation(input: WrongAnswerExplanati
           temperature,
         });
 
-        return attempt.rawText;
+        return { explanationText: validated.data, fallbackUsed: false };
       }
+
+      const latencyMs = Date.now() - startedAt;
+      await logLlmUsage({
+        taskType: "explain",
+        provider: "anthropic",
+        model: lastModel,
+        promptVersion,
+        promptTokens,
+        completionTokens,
+        cachedTokens,
+        cacheWriteTokens,
+        costUsd: 0,
+        latencyMs,
+        success: false,
+        errorMessage: `Output contract failed: ${validated.error}`,
+        questionId: input.questionId,
+        sessionId: input.sessionId,
+        temperature,
+      });
+      return { explanationText: buildWrongAnswerExplanationFallback(input), fallbackUsed: true };
     }
 
-    throw new WrongAnswerExplanationError("Explanation output still contained simplified Chinese after one retry.", {
-      status: 500,
-      rawResponse: lastRawResponse,
-      rawText: lastRawText,
-    });
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
     const latencyMs = Date.now() - startedAt;
-    const callResult = createCallResult({
-      success: false,
-      text: lastRawText,
+    await logLlmUsage({
+      taskType: "explain",
+      provider: "anthropic",
       model: lastModel,
+      promptVersion,
       promptTokens,
       completionTokens,
       cachedTokens,
       cacheWriteTokens,
+      costUsd: 0,
       latencyMs,
-      errorMessage,
+      success: false,
+      errorMessage: "Explanation output still contained simplified Chinese after one retry.",
+      questionId: input.questionId,
+      sessionId: input.sessionId,
+      temperature,
     });
+    return { explanationText: buildWrongAnswerExplanationFallback(input), fallbackUsed: true };
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    const latencyMs = Date.now() - startedAt;
 
     await logLlmUsage({
       taskType: "explain",
@@ -321,19 +349,7 @@ export async function generateWrongAnswerExplanation(input: WrongAnswerExplanati
       temperature,
     });
 
-    if (error instanceof WrongAnswerExplanationError) {
-      error.callResult = error.callResult ?? callResult;
-      error.rawResponse = error.rawResponse ?? lastRawResponse;
-      error.rawText = error.rawText ?? lastRawText;
-      throw error;
-    }
-
-    throw new WrongAnswerExplanationError(errorMessage, {
-      status: 500,
-      rawResponse: lastRawResponse,
-      rawText: lastRawText,
-      callResult,
-    });
+    return { explanationText: buildWrongAnswerExplanationFallback(input), fallbackUsed: true };
   }
 }
 

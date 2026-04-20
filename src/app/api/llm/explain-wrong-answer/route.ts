@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveChoicesAtAnswerTime, resolveExplanationForExplain, resolveStemDisplay } from "@/lib/answer-history-snapshots";
-import { generateWrongAnswerExplanation, WrongAnswerExplanationError } from "@/lib/llm/haiku-explain";
+import { generateWrongAnswerExplanation } from "@/lib/llm/haiku-explain";
 import { prisma } from "@/lib/prisma";
 
 type DirectExplainBody = {
@@ -188,23 +188,14 @@ export async function POST(request: Request) {
       input = normalizeDirectExplainBody(body);
     }
 
-    const explanationText = await generateWrongAnswerExplanation(input);
+    const { explanationText, fallbackUsed } = await generateWrongAnswerExplanation(input);
 
     return NextResponse.json({
       ok: true,
       explanationText,
+      fallbackUsed,
     });
   } catch (error) {
-    if (error instanceof WrongAnswerExplanationError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-        },
-        { status: error.status },
-      );
-    }
-
     const message = error instanceof Error ? error.message : "Unknown error.";
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }

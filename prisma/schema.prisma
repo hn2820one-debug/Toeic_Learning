@@ -296,6 +296,8 @@ model LearningSessionItem {
   practiceStateJson  Json?
   /// TEST mode: timed single-attempt — see `src/lib/test-mode.ts`
   testStateJson      Json?
+  /// REVIEW mode: FSRS rating + timed answer — see `src/lib/review-mode.ts`
+  reviewStateJson    Json?
 
   @@unique([learningSessionId, position])
   @@index([questionBankItemId])

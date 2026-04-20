@@ -1,5 +1,4 @@
-import { resolveTopicDisplay } from "@/lib/answer-history-snapshots";
-import { prisma } from "@/lib/prisma";
+import { getAnalysisPageData } from "@/lib/analysis";
 
 const SEVEN_DAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -23,6 +22,8 @@ export type WeeklyReportData = {
   summary: WeeklyReportSummary;
   topicBreakdown: WeeklyReportTopic[];
   hasData: boolean;
+  topWeaknessTopics: WeeklyReportTopic[];
+  nextAction: string;
 };
 
 function getAccuracy(correctCount: number, totalQuestions: number) {
@@ -49,88 +50,30 @@ export function getWeeklyReportWindow(now = new Date()) {
 
 export async function getWeeklyReportData(now = new Date()): Promise<WeeklyReportData> {
   const { windowStart, windowEnd } = getWeeklyReportWindow(now);
+  const analysis = await getAnalysisPageData();
+  const stats7d = analysis.stats7d;
 
-  const sessions = await prisma.studySession.findMany({
-    where: {
-      endedAt: {
-        not: null,
-        gte: windowStart,
-        lte: windowEnd,
-      },
-    },
-    orderBy: [{ endedAt: "desc" }, { id: "desc" }],
-    select: {
-      id: true,
-      totalQuestions: true,
-      correctCount: true,
-      answerHistory: {
-        select: {
-          isCorrect: true,
-          topicSnapshot: true,
-          question: {
-            select: {
-              topic: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  const summary = sessions.reduce<WeeklyReportSummary>(
-    (accumulator, session) => {
-      const totalQuestionsAnswered = getEffectiveTotalQuestions(session.totalQuestions, session.answerHistory.length);
-
-      return {
-        completedSessionCount: accumulator.completedSessionCount + 1,
-        totalQuestionsAnswered: accumulator.totalQuestionsAnswered + totalQuestionsAnswered,
-        totalCorrectAnswers: accumulator.totalCorrectAnswers + session.correctCount,
-        accuracy: 0,
-      };
-    },
-    {
-      completedSessionCount: 0,
-      totalQuestionsAnswered: 0,
-      totalCorrectAnswers: 0,
-      accuracy: 0,
-    },
-  );
-
-  summary.accuracy = getAccuracy(summary.totalCorrectAnswers, summary.totalQuestionsAnswered);
-
-  const topicMap = new Map<string, { totalAnswered: number; correctCount: number }>();
-
-  for (const session of sessions) {
-    for (const answer of session.answerHistory) {
-      const topic = resolveTopicDisplay(answer.topicSnapshot, answer.question.topic);
-      const current = topicMap.get(topic) ?? { totalAnswered: 0, correctCount: 0 };
-
-      current.totalAnswered += 1;
-      current.correctCount += answer.isCorrect ? 1 : 0;
-      topicMap.set(topic, current);
-    }
-  }
-
-  const topicBreakdown = Array.from(topicMap.entries())
-    .map(([topic, values]) => ({
-      topic,
-      totalAnswered: values.totalAnswered,
-      correctCount: values.correctCount,
-      accuracy: getAccuracy(values.correctCount, values.totalAnswered),
+  const topicBreakdown = analysis.weakTopics
+    .map((w) => ({
+      topic: w.topic,
+      totalAnswered: w.answered,
+      correctCount: Math.max(0, w.answered - w.wrongCount),
+      accuracy: w.accuracy,
     }))
-    .sort((left, right) => {
-      if (right.totalAnswered !== left.totalAnswered) {
-        return right.totalAnswered - left.totalAnswered;
-      }
-
-      return left.topic.localeCompare(right.topic);
-    });
+    .sort((a, b) => b.totalAnswered - a.totalAnswered || a.topic.localeCompare(b.topic));
 
   return {
     windowStart,
     windowEnd,
-    summary,
+    summary: {
+      completedSessionCount: stats7d.completedSessions,
+      totalQuestionsAnswered: stats7d.totalQuestions,
+      totalCorrectAnswers: stats7d.correctAnswers,
+      accuracy: stats7d.accuracy,
+    },
     topicBreakdown,
-    hasData: summary.completedSessionCount > 0,
+    hasData: stats7d.completedSessions > 0,
+    topWeaknessTopics: topicBreakdown.slice(0, 3),
+    nextAction: analysis.weekly.nextActions.narrativeZh,
   };
 }

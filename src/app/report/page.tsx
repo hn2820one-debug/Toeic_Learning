@@ -2,6 +2,7 @@ import AiWeeklyCoachingReport from "@/components/report/AiWeeklyCoachingReport";
 import AppCard from "@/components/ui/AppCard";
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import { getWeeklyReportData } from "@/lib/report";
+import { getDeterministicWeeklyReport } from "@/lib/weekly-report";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ function formatTimestamp(value: Date) {
 }
 
 export default async function ReportPage() {
-  const report = await getWeeklyReportData();
+  const [report, det] = await Promise.all([getWeeklyReportData(), getDeterministicWeeklyReport()]);
 
   return (
     <div>
@@ -36,9 +37,7 @@ export default async function ReportPage() {
             Sessions with endedAt in this range are included (English same as data labels below).
           </span>
         </p>
-        <p className="mt-3 text-sm text-slate-600">
-          總計來自 StudySession；主題分布來自對應場次之 AnswerHistory。
-        </p>
+        <p className="mt-3 text-sm text-slate-600">統計與 next action 來自 deterministic analysis pipeline；LLM 只負責教練語氣重寫。</p>
       </AppCard>
 
       <div className="space-y-6">
@@ -117,6 +116,42 @@ export default async function ReportPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </AppCard>
+
+            <AppCard>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary-600">Deterministic weekly report</p>
+              <h2 className="text-xl font-semibold text-slate-900">可執行週報（非純數字）</h2>
+              <div className="mt-4 space-y-4 text-sm text-slate-700">
+                <section>
+                  <p className="font-semibold text-slate-900">1. 本週學習概況</p>
+                  <p>{det.sectionOverview}</p>
+                </section>
+                <section>
+                  <p className="font-semibold text-slate-900">2. 三個主要弱點</p>
+                  <ul className="list-disc pl-5">
+                    {det.sectionWeaknesses.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <p className="font-semibold text-slate-900">3. 最高 ROI topic</p>
+                  <p>{det.topRoiTopic}</p>
+                </section>
+                <section>
+                  <p className="font-semibold text-slate-900">4. 下週建議三件事</p>
+                  <ul className="list-disc pl-5">
+                    {det.sectionNextWeekActions.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </section>
+                <section>
+                  <p className="font-semibold text-slate-900">5. 明確 next action</p>
+                  <p>{det.nextAction}</p>
+                  <p className="mt-2 text-xs text-slate-500">Generated at {new Date(det.generatedAt).toLocaleString("zh-TW", { hour12: false })}</p>
+                </section>
               </div>
             </AppCard>
           </>

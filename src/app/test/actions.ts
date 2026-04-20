@@ -11,16 +11,17 @@ import { primaryModuleForTopic } from "@/lib/learning-path";
 import { logOpsWarn } from "@/lib/ops-log";
 import { prisma } from "@/lib/prisma";
 import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
+import { applyCheckpointProgressWriteback } from "@/lib/test/apply-checkpoint-progress";
+import { buildTestSessionFromQuery } from "@/lib/test/build-test-session";
+import { finalizeTestSession, type SessionWithTestItems } from "@/lib/test/finalize-test-session";
+import { resolveTestQuestionCount } from "@/lib/test/resolve-test-count";
+import { submitTestAnswerPure } from "@/lib/test/submit-test-answer";
+import type { CheckpointRuntimeMeta } from "@/lib/test/test-runtime-types";
 import {
   buildTestQuestionSet,
-  collectTestCompositionWarnings,
   emptyTestItemState,
-  getTestResultSummary,
   isTestItemResolved,
   parseTestItemState,
-  TEST_QUESTION_COUNT,
-  TEST_SECONDS_PER_QUESTION,
-  TEST_TIMEOUT_USER_CHOICE,
   type TestItemStateJson,
 } from "@/lib/test-mode";
 
@@ -47,6 +48,13 @@ async function ensureLearningTopic(topicKey: Phase1TopicKey) {
 
 export type TestActionResult = { ok: true } | { ok: false; error: string };
 
+export type StartTestSessionOptions = {
+  mode?: string;
+  skill?: string;
+  moduleKey?: string;
+  count?: number;
+};
+
 async function loadOwnedTestSession(userId: number, sessionId: string) {
   return prisma.learningSession.findFirst({
     where: { id: sessionId, userId, mode: "test" },
@@ -59,7 +67,10 @@ async function loadOwnedTestSession(userId: number, sessionId: string) {
   });
 }
 
-export async function startTestSession(topicKey: string): Promise<TestActionResult & { sessionId?: string }> {
+export async function startTestSession(
+  topicKey: string,
+  options?: StartTestSessionOptions,
+): Promise<TestActionResult & { sessionId?: string }> {
   if (!isPhase1TopicKey(topicKey)) {
     return { ok: false, error: "invalid_topic" };
   }
@@ -78,10 +89,45 @@ export async function startTestSession(topicKey: string): Promise<TestActionResu
   await ensureLearningTopic(topicKey);
   const mod = primaryModuleForTopic(topicKey);
 
-  const built = await buildTestQuestionSet(topicKey);
-  if (built.questionIds.length < TEST_QUESTION_COUNT) {
+  const targetN = resolveTestQuestionCount(options?.mode, options?.count);
+
+  let ids: number[] = [];
+  let checkpointMeta: CheckpointRuntimeMeta | undefined;
+
+  const checkpoint = await buildTestSessionFromQuery({
+    topicKey,
+    mode: options?.mode,
+    skill: options?.skill,
+    moduleKey: options?.moduleKey,
+    count: options?.count,
+  });
+
+  if (checkpoint && checkpoint.questionIds.length > 0) {
+    ids = checkpoint.questionIds;
+    checkpointMeta = checkpoint.meta;
+  } else {
+    const legacy = await buildTestQuestionSet(topicKey);
+    const take = Math.min(targetN, legacy.questionIds.length);
+    ids = legacy.questionIds.slice(0, take);
+    checkpointMeta = {
+      mode: "test",
+      topicKey,
+      moduleKey: mod.moduleKey,
+      count: ids.length,
+      skillRuleSlots: Math.min(10, ids.length),
+      secondsPerQuestion: 30,
+    };
+  }
+
+  if (ids.length === 0) {
     return { ok: false, error: "insufficient_questions" };
   }
+
+  const revisitMetaJson: Prisma.InputJsonValue = {
+    v: 1,
+    revisitCount: 0,
+    checkpointRuntime: checkpointMeta,
+  } as unknown as Prisma.InputJsonValue;
 
   await prisma.learningSession.updateMany({
     where: {
@@ -104,8 +150,9 @@ export async function startTestSession(topicKey: string): Promise<TestActionResu
       topicKey,
       mode: "test",
       status: "active",
+      revisitMetaJson,
       items: {
-        create: built.questionIds.map((questionBankItemId, position) => ({
+        create: ids.map((questionBankItemId, position) => ({
           questionBankItemId,
           position,
           testStateJson: emptyTestItemState() as unknown as Prisma.InputJsonValue,
@@ -199,44 +246,18 @@ export async function submitTestAnswer(
     return { ok: false, error: "already_answered" };
   }
 
-  const trimmed = choice.trim();
-  const isTimeout = trimmed === TEST_TIMEOUT_USER_CHOICE || trimmed.toUpperCase() === TEST_TIMEOUT_USER_CHOICE;
-
-  let shownAt = st.shownAt;
-  if (!shownAt) {
-    shownAt = new Date().toISOString();
+  const pure = submitTestAnswerPure({
+    state: st,
+    correctAnswer: q.correctAnswer,
+    choiceRaw: choice,
+  });
+  if (!pure.ok) {
+    logSubmitFailure(pure.error);
+    return { ok: false, error: pure.error };
   }
-
-  const answeredAt = new Date().toISOString();
-  const shownMs = new Date(shownAt).getTime();
-  const ansMs = Date.now();
-  let timeTakenSec = Math.min(TEST_SECONDS_PER_QUESTION, Math.max(0, (ansMs - shownMs) / 1000));
-  if (isTimeout) {
-    timeTakenSec = TEST_SECONDS_PER_QUESTION;
-  }
-
-  let normalizedChoice: string;
-  if (isTimeout) {
-    normalizedChoice = TEST_TIMEOUT_USER_CHOICE;
-  } else {
-    normalizedChoice = trimmed.toUpperCase();
-    if (!["A", "B", "C", "D"].includes(normalizedChoice)) {
-      logSubmitFailure("invalid_choice");
-      return { ok: false, error: "invalid_choice" };
-    }
-  }
-
-  const correct = !isTimeout && normalizedChoice === q.correctAnswer.trim().toUpperCase();
 
   const next: TestItemStateJson = {
-    ...st,
-    phase: "answered",
-    shownAt,
-    userChoice: normalizedChoice,
-    correct,
-    answeredAt,
-    timeTakenSec,
-    timedOut: isTimeout,
+    ...pure.next,
     lastSubmitKey: normalizedSubmitKey,
   };
 
@@ -277,27 +298,10 @@ export async function completeTestSession(sessionId: string): Promise<
     }
   }
 
-  const summary = getTestResultSummary({
-    items: session.items.map((it) => {
-      const q = it.question;
-      return {
-        position: it.position,
-        questionText: q.questionText,
-        optionA: q.optionA,
-        optionB: q.optionB,
-        optionC: q.optionC,
-        optionD: q.optionD,
-        correctAnswer: q.correctAnswer,
-        explanation: q.explanation,
-        testState: parseTestItemState(it.testStateJson),
-      };
-    }),
-  });
-
-  const compositionWarnings = collectTestCompositionWarnings(
+  const { summary, compositionWarnings } = finalizeTestSession({
     topicKey,
-    session.items.map((it) => ({ position: it.position, topicKey: it.question.topicKey })),
-  );
+    session: session as SessionWithTestItems,
+  });
 
   const mod = primaryModuleForTopic(topicKey);
 
@@ -318,12 +322,15 @@ export async function completeTestSession(sessionId: string): Promise<
       passThreshold: 0.7,
       passed: summary.passed,
       summarySnapshot: JSON.stringify({
+        totalQuestions: summary.totalQuestions,
         topicAccuracy: summary.topicAccuracy,
         overallAccuracy: summary.overallAccuracy,
+        targetSkillAccuracy: summary.targetSkillAccuracy,
         topicCorrect: summary.topicCorrect,
         overallCorrect: summary.overallCorrect,
         timeoutCount: summary.timeoutCount,
         compositionWarnings,
+        passed: summary.passed,
       }),
     },
   });
@@ -338,24 +345,12 @@ export async function completeTestSession(sessionId: string): Promise<
     return { ok: false, error: "no_progress" };
   }
 
-  if (summary.passed) {
-    await prisma.userTopicProgress.update({
-      where: { userId_topicKey: { userId: user.id, topicKey } },
-      data: {
-        stage: "Tested",
-        testPassedAt: new Date(),
-        testAccuracy: summary.overallAccuracy,
-        testAttempts: { increment: 1 },
-      },
-    });
-  } else {
-    await prisma.userTopicProgress.update({
-      where: { userId_topicKey: { userId: user.id, topicKey } },
-      data: {
-        testAttempts: { increment: 1 },
-      },
-    });
-  }
+  await applyCheckpointProgressWriteback({
+    userId: user.id,
+    topicKey,
+    passed: summary.passed,
+    overallAccuracy: summary.overallAccuracy,
+  });
 
   revalidatePath("/test");
   revalidatePath("/learn");

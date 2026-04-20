@@ -5,6 +5,7 @@ import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-orde
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { buildTestSessionHesitationRows, summarizeMasteryTiers } from "@/lib/analytics/hesitation";
 import { getOrCreateDevUser } from "@/lib/dev-user";
+import { parseCheckpointRuntimeFromRevisitMeta } from "@/lib/test/test-session-meta";
 import { getTestResultSummary, parseTestItemState, type TestResultSummary } from "@/lib/test-mode";
 import { prisma } from "@/lib/prisma";
 import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
@@ -50,6 +51,7 @@ export type TestPageView =
       questions: TestQuestionPayloadActive[];
       currentPosition: number;
       itemStatesJson: unknown[];
+      secondsPerQuestion: number;
       /** Present when status === completed */
       resultSummary?: TestResultSummary;
       compositionWarnings?: string[];
@@ -62,6 +64,10 @@ export async function getTestPageView(params: {
   topicAlias?: string | undefined;
   sessionId: string | undefined;
   pos: number;
+  mode?: string;
+  skill?: string;
+  moduleKey?: string;
+  count?: number;
 }): Promise<TestPageView> {
   const raw = params.topicKey ?? params.topicAlias;
   if (!raw || !isPhase1TopicKey(raw)) {
@@ -121,6 +127,7 @@ export async function getTestPageView(params: {
       const pos = Number.isFinite(params.pos) ? Math.max(0, Math.floor(params.pos)) : 0;
 
       if (session.status === "active") {
+        const meta = parseCheckpointRuntimeFromRevisitMeta(session.revisitMetaJson);
         const questions: TestQuestionPayloadActive[] = session.items.map((it) => {
           const q = it.question;
           return {
@@ -133,12 +140,6 @@ export async function getTestPageView(params: {
             optionD: q.optionD,
           };
         });
-        const nextStep = await getCompletionNextStep({
-          defaultHref: `/learn/${encodeURIComponent(tk)}`,
-          defaultTitleZh: "回到今日學習",
-          defaultDetailZh: "驗收後建議先處理 learning path 排序最高的任務。",
-        });
-
         return {
           kind: "session",
           topicKey: tk,
@@ -148,10 +149,12 @@ export async function getTestPageView(params: {
           questions,
           currentPosition: Math.min(pos, Math.max(0, questions.length - 1)),
           itemStatesJson: session.items.map((it) => it.testStateJson ?? null),
+          secondsPerQuestion: meta?.secondsPerQuestion ?? 30,
         };
       }
 
       if (session.status === "completed") {
+        const crMeta = parseCheckpointRuntimeFromRevisitMeta(session.revisitMetaJson);
         const base = getTestResultSummary({
           items: session.items.map((it) => {
             const q = it.question;
@@ -164,9 +167,12 @@ export async function getTestPageView(params: {
               optionD: q.optionD,
               correctAnswer: q.correctAnswer,
               explanation: q.explanation,
+              primaryLearningSkillCode: q.primaryLearningSkillCode,
               testState: parseTestItemState(it.testStateJson),
             };
           }),
+          skillRuleSlots: crMeta?.skillRuleSlots,
+          targetSkillCode: crMeta?.skill ?? null,
         });
         const hesitationItems = buildTestSessionHesitationRows(session.items);
         const summary: TestResultSummary = {
@@ -227,6 +233,7 @@ export async function getTestPageView(params: {
           questions,
           currentPosition: 0,
           itemStatesJson: session.items.map((it) => it.testStateJson ?? null),
+          secondsPerQuestion: crMeta?.secondsPerQuestion ?? 30,
           resultSummary: summary,
           compositionWarnings,
           nextStep,
@@ -242,6 +249,7 @@ export async function getTestPageView(params: {
         questions: [],
         currentPosition: 0,
         itemStatesJson: [],
+        secondsPerQuestion: 30,
       };
     }
   }

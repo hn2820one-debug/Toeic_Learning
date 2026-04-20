@@ -82,22 +82,29 @@ export type CheckpointScoreResult = {
 
 const DEFAULT_TOPIC_MIN = 0.8;
 const DEFAULT_OVERALL_MIN = 0.7;
+/** When total items &lt; 15, pass requires only overall accuracy ≥ this threshold. */
+const SHORT_SESSION_OVERALL_MIN = 0.75;
+/** Full rules (skill slice + overall) apply when session length ≥ this. */
+export const CHECKPOINT_FULL_RULE_MIN_ITEMS = 15;
 
 /**
- * Default checkpoint pass rule:
- * - Target-topic slots (positions 1–10): accuracy ≥ 80%
- * - All 15: accuracy ≥ 70%
+ * Variable-length checkpoint scoring.
+ * - If `answers.length >= 15`: first `skillRuleSlots` answers (cap 10) vs **topicMin** + overall vs **overallMin**.
+ * - If shorter: **overall** ≥ `shortSessionOverallMin` (default 0.75) only.
  */
-export function scoreCheckpoint(
-  input: CheckpointScoreInput,
-  opts?: { topicMin?: number; overallMin?: number },
+export function scoreCheckpointSession(
+  input: {
+    answers: ReadonlyArray<{ correct: boolean; timedOut: boolean }>;
+    /** Usually `min(10, n)` — positions used for “target skill phase” rule. */
+    skillRuleSlots: number;
+  },
+  opts?: { topicMin?: number; overallMin?: number; shortSessionOverallMin?: number },
 ): CheckpointScoreResult {
   const topicMin = opts?.topicMin ?? DEFAULT_TOPIC_MIN;
   const overallMin = opts?.overallMin ?? DEFAULT_OVERALL_MIN;
+  const shortOverallMin = opts?.shortSessionOverallMin ?? SHORT_SESSION_OVERALL_MIN;
   const answers = input.answers;
-  if (answers.length !== TEST_QUESTION_COUNT) {
-    throw new Error(`scoreCheckpoint: expected ${TEST_QUESTION_COUNT} answers, got ${answers.length}`);
-  }
+  const n = answers.length;
 
   let timeoutCount = 0;
   for (const a of answers) {
@@ -106,14 +113,29 @@ export function scoreCheckpoint(
     }
   }
 
-  const topicSlice = answers.slice(0, TEST_TOPIC_RULE_COUNT);
+  if (n === 0) {
+    return {
+      topicCorrect: 0,
+      topicAccuracy: 0,
+      overallCorrect: 0,
+      overallAccuracy: 0,
+      timeoutCount: 0,
+      passed: false,
+    };
+  }
+
+  const skillSlots = Math.min(Math.max(0, input.skillRuleSlots), n);
+  const topicSlice = answers.slice(0, skillSlots);
   const topicCorrect = topicSlice.filter((a) => a.correct).length;
-  const topicAccuracy = topicCorrect / TEST_TOPIC_RULE_COUNT;
+  const topicAccuracy = skillSlots > 0 ? topicCorrect / skillSlots : 0;
 
   const overallCorrect = answers.filter((a) => a.correct).length;
-  const overallAccuracy = overallCorrect / TEST_QUESTION_COUNT;
+  const overallAccuracy = overallCorrect / n;
 
-  const passed = topicAccuracy >= topicMin && overallAccuracy >= overallMin;
+  const passed =
+    n >= CHECKPOINT_FULL_RULE_MIN_ITEMS
+      ? topicAccuracy >= topicMin && overallAccuracy >= overallMin
+      : overallAccuracy >= shortOverallMin;
 
   return {
     topicCorrect,
@@ -123,6 +145,22 @@ export function scoreCheckpoint(
     timeoutCount,
     passed,
   };
+}
+
+/**
+ * Default checkpoint pass rule (legacy **15**-question sessions):
+ * - Target-topic slots (positions 1–10): accuracy ≥ 80%
+ * - All 15: accuracy ≥ 70%
+ */
+export function scoreCheckpoint(
+  input: CheckpointScoreInput,
+  opts?: { topicMin?: number; overallMin?: number },
+): CheckpointScoreResult {
+  const answers = input.answers;
+  if (answers.length !== TEST_QUESTION_COUNT) {
+    throw new Error(`scoreCheckpoint: expected ${TEST_QUESTION_COUNT} answers, got ${answers.length}`);
+  }
+  return scoreCheckpointSession({ answers, skillRuleSlots: TEST_TOPIC_RULE_COUNT }, opts);
 }
 
 // ─── Result summary (pure, given scored rows) ────────────────────
@@ -143,10 +181,15 @@ export type TestPerItemResultRow = {
 };
 
 export type TestResultSummary = {
+  totalQuestions: number;
   topicCorrect: number;
   topicAccuracy: number;
   overallCorrect: number;
   overallAccuracy: number;
+  /** Among bank rows whose `primaryLearningSkillCode` equals the checkpoint target skill (if known). */
+  targetSkillAccuracy?: number;
+  targetSkillCorrect?: number;
+  targetSkillTotal?: number;
   timeoutCount: number;
   passed: boolean;
   avgTimeTakenSec: number | null;
@@ -174,8 +217,13 @@ export function getTestResultSummary(params: {
     optionD: string;
     correctAnswer: string;
     explanation: string | null;
+    primaryLearningSkillCode?: string | null;
     testState: TestItemStateJson;
   }>;
+  /** Defaults to `min(10, n)` when omitted. */
+  skillRuleSlots?: number;
+  /** If set, computes bank-based target skill accuracy for the results UI. */
+  targetSkillCode?: string | null;
 }): TestResultSummary {
   const builtAnswers: { correct: boolean; timedOut: boolean }[] = [];
   const perItem: TestPerItemResultRow[] = [];
@@ -204,18 +252,58 @@ export function getTestResultSummary(params: {
     });
   }
 
-  if (builtAnswers.length !== TEST_QUESTION_COUNT) {
-    throw new Error(`getTestResultSummary: expected ${TEST_QUESTION_COUNT} items, got ${builtAnswers.length}`);
+  const n = builtAnswers.length;
+  if (n === 0) {
+    return {
+      totalQuestions: 0,
+      topicCorrect: 0,
+      topicAccuracy: 0,
+      overallCorrect: 0,
+      overallAccuracy: 0,
+      timeoutCount: 0,
+      passed: false,
+      avgTimeTakenSec: null,
+      perItem: [],
+    };
   }
 
-  const score = scoreCheckpoint({ answers: builtAnswers });
+  const ruleSlots = params.skillRuleSlots ?? Math.min(TEST_TOPIC_RULE_COUNT, n);
+  const score = scoreCheckpointSession({ answers: builtAnswers, skillRuleSlots: ruleSlots });
 
   const times = perItem.map((p) => p.timeTakenSec).filter((t): t is number => t != null && Number.isFinite(t));
   const avgTimeTakenSec =
     times.length === 0 ? null : times.reduce((a, b) => a + b, 0) / times.length;
 
+  const target = params.targetSkillCode?.trim();
+  let targetSkillAccuracy: number | undefined;
+  let targetSkillCorrect: number | undefined;
+  let targetSkillTotal: number | undefined;
+  if (target) {
+    let sk = 0;
+    let stot = 0;
+    for (let i = 0; i < ordered.length; i += 1) {
+      const row = ordered[i]!;
+      if (row.primaryLearningSkillCode !== target) {
+        continue;
+      }
+      stot += 1;
+      if (builtAnswers[i]!.correct) {
+        sk += 1;
+      }
+    }
+    if (stot > 0) {
+      targetSkillTotal = stot;
+      targetSkillCorrect = sk;
+      targetSkillAccuracy = sk / stot;
+    }
+  }
+
   return {
+    totalQuestions: n,
     ...score,
+    targetSkillAccuracy,
+    targetSkillCorrect,
+    targetSkillTotal,
     avgTimeTakenSec,
     perItem,
   };
@@ -389,13 +477,15 @@ export async function buildTestQuestionSet(topicKey: Phase1TopicKey): Promise<Te
 export function collectTestCompositionWarnings(
   targetTopic: Phase1TopicKey,
   orderedItems: ReadonlyArray<{ position: number; topicKey: string | null }>,
+  opts?: { skillRuleSlots?: number },
 ): string[] {
+  const skillSlots = opts?.skillRuleSlots ?? TEST_TOPIC_RULE_COUNT;
   const w: string[] = [];
   for (const it of orderedItems) {
-    if (it.position < TEST_TOPIC_RULE_COUNT && it.topicKey !== targetTopic) {
+    if (it.position < skillSlots && it.topicKey !== targetTopic) {
       w.push(`topic_rule_slot_${it.position}_topicKey_mismatch`);
     }
-    if (it.position >= TEST_TOPIC_RULE_COUNT && it.topicKey === targetTopic) {
+    if (it.position >= skillSlots && it.topicKey === targetTopic) {
       w.push(`distractor_slot_${it.position}_still_target_topic`);
     }
   }

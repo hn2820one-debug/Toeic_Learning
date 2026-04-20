@@ -8,12 +8,23 @@ import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getTestPageView } from "@/lib/test-page-loader";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
-import TestSessionClient, { TestStartClient } from "./TestSessionClient";
+import { resolveTestQuestionCount } from "@/lib/test/resolve-test-count";
+
+import TestSessionClient, { TestStartClient, type TestStartPreset } from "./TestSessionClient";
 
 export const dynamic = "force-dynamic";
 
 type TestPageProps = {
-  searchParams?: { topicKey?: string; topic?: string; session?: string; pos?: string };
+  searchParams?: {
+    topicKey?: string;
+    topic?: string;
+    session?: string;
+    pos?: string;
+    mode?: string;
+    skill?: string;
+    moduleKey?: string;
+    count?: string;
+  };
 };
 
 function parseTopicKey(raw: string | undefined): Phase1TopicKey | null {
@@ -24,15 +35,24 @@ function parseTopicKey(raw: string | undefined): Phase1TopicKey | null {
 }
 
 export default async function TestPage({ searchParams }: TestPageProps) {
+  const sp = searchParams;
   const topicKey = parseTopicKey(
-    typeof searchParams?.topicKey === "string"
-      ? searchParams.topicKey
-      : typeof searchParams?.topic === "string"
-        ? searchParams.topic
-        : undefined,
+    typeof sp?.topicKey === "string" ? sp.topicKey : typeof sp?.topic === "string" ? sp.topic : undefined,
   );
-  const sessionId = typeof searchParams?.session === "string" ? searchParams.session : undefined;
-  const pos = Number.parseInt(typeof searchParams?.pos === "string" ? searchParams.pos : "0", 10) || 0;
+  const sessionId = typeof sp?.session === "string" ? sp.session : undefined;
+  const pos = Number.parseInt(typeof sp?.pos === "string" ? sp.pos : "0", 10) || 0;
+  const mode = typeof sp?.mode === "string" ? sp.mode : undefined;
+  const skill = typeof sp?.skill === "string" ? sp.skill : undefined;
+  const moduleKey = typeof sp?.moduleKey === "string" ? sp.moduleKey : undefined;
+  const countParsed = Number.parseInt(typeof sp?.count === "string" ? sp.count : "", 10);
+  const countParam = Number.isFinite(countParsed) ? countParsed : undefined;
+  const targetCount = resolveTestQuestionCount(mode, countParam);
+  const startPreset: TestStartPreset = {
+    mode,
+    skill,
+    moduleKey,
+    count: countParam,
+  };
 
   if (!topicKey) {
     return (
@@ -40,8 +60,8 @@ export default async function TestPage({ searchParams }: TestPageProps) {
         <BilingualHeading
           titleZh="驗收"
           titleEn="Test"
-          descriptionZh="請帶入 topicKey 或 topic，例如 /test?topicKey=office 或 /test?topic=office。"
-          descriptionEn="Open with ?topicKey=… or ?topic=…"
+          descriptionZh="請帶入 topicKey；checkpoint 可加 mode/skill，例如 /test?topicKey=office&mode=checkpoint&skill=grammar_svc&count=15。"
+          descriptionEn="Use ?topicKey=…; checkpoint: ?mode=checkpoint&skill=…&count=…"
         />
         <AppCard padding="md">
           <Link href="/learn" className="font-semibold text-primary-700 underline">
@@ -53,10 +73,14 @@ export default async function TestPage({ searchParams }: TestPageProps) {
   }
 
   const view = await getTestPageView({
-    topicKey: typeof searchParams?.topicKey === "string" ? searchParams.topicKey : undefined,
-    topicAlias: typeof searchParams?.topic === "string" ? searchParams.topic : undefined,
+    topicKey: typeof sp?.topicKey === "string" ? sp.topicKey : undefined,
+    topicAlias: typeof sp?.topic === "string" ? sp.topic : undefined,
     sessionId,
     pos,
+    mode,
+    skill,
+    moduleKey,
+    count: countParam,
   });
 
   if (view.kind === "no_user") {
@@ -106,8 +130,8 @@ export default async function TestPage({ searchParams }: TestPageProps) {
         <BilingualHeading
           titleZh="限時驗收"
           titleEn="Timed checkpoint"
-          descriptionZh="無提示、無重試；每題 30 秒，逾時計錯。完成後才顯示解析。通過後主題階段由 Practiced → Tested。"
-          descriptionEn="No hints or retries; 30s per question. Explanations after submit. Pass promotes stage to Tested."
+          descriptionZh={`無提示、無重試；約 ${targetCount} 題 · 每題 30s · 逾時計錯。可用 ?mode=checkpoint&skill=… 雙軸揀題。通過後 Practiced → Tested。`}
+          descriptionEn={`~${targetCount} items · 30s each. Optional ?mode=checkpoint&skill=…. Pass promotes to Tested.`}
         />
         <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
           <p className="font-semibold">主題 · Topic</p>
@@ -131,7 +155,25 @@ export default async function TestPage({ searchParams }: TestPageProps) {
               <p className="font-semibold">偵測到未完成驗收</p>
               <div className="mt-1">
                 <Link
-                  href={`/test?topicKey=${encodeURIComponent(view.topicKey)}&session=${encodeURIComponent(view.resumeCandidate.sessionId)}&pos=0`}
+                  href={(() => {
+                    const rq = new URLSearchParams();
+                    rq.set("topicKey", view.topicKey);
+                    rq.set("session", view.resumeCandidate.sessionId);
+                    rq.set("pos", "0");
+                    if (mode) {
+                      rq.set("mode", mode);
+                    }
+                    if (skill) {
+                      rq.set("skill", skill);
+                    }
+                    if (moduleKey) {
+                      rq.set("moduleKey", moduleKey);
+                    }
+                    if (countParam != null) {
+                      rq.set("count", String(countParam));
+                    }
+                    return `/test?${rq.toString()}`;
+                  })()}
                   className="font-semibold underline"
                 >
                   先接續舊場次
@@ -139,7 +181,7 @@ export default async function TestPage({ searchParams }: TestPageProps) {
               </div>
             </div>
           ) : null}
-          <TestStartClient topicKey={view.topicKey} />
+          <TestStartClient topicKey={view.topicKey} preset={startPreset} />
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={`/practice?topicKey=${encodeURIComponent(view.topicKey)}`}
@@ -169,6 +211,7 @@ export default async function TestPage({ searchParams }: TestPageProps) {
             questions={[]}
             initialPos={0}
             itemStatesJson={[]}
+            secondsPerQuestion={30}
           />
         </div>
       );
@@ -198,6 +241,7 @@ export default async function TestPage({ searchParams }: TestPageProps) {
           questions={view.questions}
           initialPos={view.currentPosition}
           itemStatesJson={view.itemStatesJson}
+          secondsPerQuestion={view.secondsPerQuestion}
           resultSummary={view.resultSummary}
           compositionWarnings={view.compositionWarnings}
           nextStep={view.nextStep}

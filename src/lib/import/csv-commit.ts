@@ -9,22 +9,11 @@ import {
   type QuestionFieldInput,
   validateAndNormalizeQuestionInput,
 } from "@/lib/question-fields";
+import { applyQuestionFieldDefaults } from "@/lib/question-bank/normalize-input";
 import { buildQuestionBankCreateData } from "@/lib/question-management";
 import { logOpsWarn } from "@/lib/ops-log";
 
 import { rowSchema, type CsvValidRow } from "./csv-preview";
-
-function mapGrammarPointsToNotes(grammarPoints: string | undefined): string | null {
-  const notes = grammarPoints?.trim()
-    ? grammarPoints
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .join(", ")
-    : null;
-
-  return notes;
-}
 
 function csvRowToQuestionFieldInput(r: CsvValidRow): QuestionFieldInput {
   const input: QuestionFieldInput = {
@@ -78,7 +67,7 @@ export async function commitCsvImport(token: string): Promise<CsvCommitResult> {
   const validatedRows: { csv: CsvValidRow; data: NormalizedQuestionFields }[] = [];
 
   for (const r of rows) {
-    const validation = validateAndNormalizeQuestionInput(csvRowToQuestionFieldInput(r));
+    const validation = validateAndNormalizeQuestionInput(applyQuestionFieldDefaults(csvRowToQuestionFieldInput(r)));
     if (!validation.ok) {
       return {
         ok: false,
@@ -128,10 +117,12 @@ export async function commitCsvImport(token: string): Promise<CsvCommitResult> {
   for (let i = 0; i < toCreate.length; i += BATCH) {
     const batch = toCreate.slice(i, i + BATCH);
     const result = await prisma.questionBankItem.createMany({
-      data: batch.map(({ csv, data }) => ({
-        ...buildQuestionBankCreateData(data, { defaultSourceQuality: "import_csv" }),
-        notes: mapGrammarPointsToNotes(csv.grammarPoints),
-      })),
+      data: batch.map(({ csv, data }) =>
+        buildQuestionBankCreateData(data, {
+          sourceKind: "import_csv",
+          grammarPointsRaw: csv.grammarPoints,
+        }),
+      ),
     });
     imported += result.count;
   }

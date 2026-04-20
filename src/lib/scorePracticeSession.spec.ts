@@ -4,6 +4,7 @@ import {
   computePracticeOutcome,
   HINT_PENALTY_PER_VIEW,
   PASS_MIN_EFFECTIVE,
+  PASS_MIN_RAW_RATE,
 } from "@/lib/practice/practice-result-rules";
 
 describe("computePracticeOutcome", () => {

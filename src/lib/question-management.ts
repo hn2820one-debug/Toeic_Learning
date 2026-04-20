@@ -1,13 +1,17 @@
-import type { Prisma } from "../../generated/prisma";
-
 import { prisma } from "@/lib/prisma";
 import {
   DUPLICATE_QUESTION_TEXT_BODY,
   formatQuestionValidationMessage,
-  type NormalizedQuestionFields,
   type QuestionFieldInput,
   validateAndNormalizeQuestionInput,
 } from "@/lib/question-fields";
+import { logOpsWarn } from "@/lib/ops-log";
+import {
+  toQuestionBankCreateInput,
+  toQuestionBankUpdateInput,
+  type QuestionBankExtraInput,
+  type QuestionBankSourceKind,
+} from "@/lib/question-bank/normalize-input";
 
 type SearchParamValue = string | string[] | undefined;
 
@@ -46,79 +50,52 @@ type UpdateQuestionInput = QuestionMutationFieldInput & {
 
 type CreateQuestionInput = QuestionMutationFieldInput;
 
-/** Shared Prisma payload for creates (manual, JSON import, tests). */
+export type BuildQuestionBankDataOptions = {
+  defaultSourceQuality?: string;
+  sourceKind?: QuestionBankSourceKind;
+  extra?: QuestionBankExtraInput;
+  grammarPointsRaw?: string | null;
+};
+
+/** Shared Prisma payload — always runs normalize-first (taxonomy + primaryLearningSkill inference). */
 export function buildQuestionBankCreateData(
-  validated: NormalizedQuestionFields,
-  options?: { defaultSourceQuality?: string },
-): Prisma.QuestionBankItemCreateInput {
-  const defaultSourceQuality = options?.defaultSourceQuality ?? "manual";
-
-  const data: Prisma.QuestionBankItemCreateInput = {
-    questionText: validated.questionText,
-    optionA: validated.optionA,
-    optionB: validated.optionB,
-    optionC: validated.optionC,
-    optionD: validated.optionD,
-    correctAnswer: validated.correctAnswer,
-    explanation: validated.explanation,
-    topic: validated.topic,
-    difficulty: validated.difficulty,
-    sourceQuality: validated.sourceQuality !== undefined ? validated.sourceQuality : defaultSourceQuality,
-  };
-
-  if (validated.skillKey !== undefined) {
-    data.skillKey = validated.skillKey;
+  validated: import("@/lib/question-fields").NormalizedQuestionFields,
+  options?: BuildQuestionBankDataOptions,
+) {
+  const { data, warnings } = toQuestionBankCreateInput(validated, {
+    sourceKind: options?.sourceKind ?? "manual",
+    defaultSourceQuality: options?.defaultSourceQuality,
+    extra: options?.extra,
+    grammarPointsRaw: options?.grammarPointsRaw,
+  });
+  if (warnings.length > 0 && (options?.sourceKind ?? "manual") === "manual") {
+    logOpsWarn({
+      area: "question_bank",
+      event: "normalize_create_warnings",
+      detail: { warnings },
+    });
   }
-
-  if (validated.topicKey !== undefined) {
-    data.topicKey = validated.topicKey;
-  }
-
-  if (validated.moduleKey !== undefined) {
-    data.moduleKey = validated.moduleKey;
-  }
-
-  if (validated.priorKnown !== undefined) {
-    data.priorKnown = validated.priorKnown;
-  }
-
   return data;
 }
 
-/** Prisma update payload: only sets taxonomy keys when present on the validated object (forms omit them). */
-export function buildQuestionBankUpdateData(validated: NormalizedQuestionFields): Prisma.QuestionBankItemUpdateInput {
-  const data: Prisma.QuestionBankItemUpdateInput = {
-    questionText: validated.questionText,
-    optionA: validated.optionA,
-    optionB: validated.optionB,
-    optionC: validated.optionC,
-    optionD: validated.optionD,
-    correctAnswer: validated.correctAnswer,
-    explanation: validated.explanation,
-    topic: validated.topic,
-    difficulty: validated.difficulty,
-  };
-
-  if (validated.skillKey !== undefined) {
-    data.skillKey = validated.skillKey;
+/** Prisma update payload — same normalize-first rules as create. */
+export function buildQuestionBankUpdateData(
+  validated: import("@/lib/question-fields").NormalizedQuestionFields,
+  options?: BuildQuestionBankDataOptions,
+) {
+  const { data, warnings } = toQuestionBankUpdateInput(validated, {
+    sourceKind: options?.sourceKind ?? "manual",
+    defaultSourceQuality: options?.defaultSourceQuality,
+    extra: options?.extra,
+    grammarPointsRaw: options?.grammarPointsRaw,
+  });
+  if (warnings.length > 0 && (options?.sourceKind ?? "manual") === "manual") {
+    logOpsWarn({
+      area: "question_bank",
+      event: "normalize_update_warnings",
+      detail: { warnings },
+    });
   }
-
-  if (validated.topicKey !== undefined) {
-    data.topicKey = validated.topicKey;
-  }
-
-  if (validated.moduleKey !== undefined) {
-    data.moduleKey = validated.moduleKey;
-  }
-
-  if (validated.sourceQuality !== undefined) {
-    data.sourceQuality = validated.sourceQuality;
-  }
-
-  if (validated.priorKnown !== undefined) {
-    data.priorKnown = validated.priorKnown;
-  }
-
   return data;
 }
 
@@ -289,7 +266,7 @@ export async function createQuestionBankItem(input: CreateQuestionInput): Promis
 
   try {
     const question = await prisma.questionBankItem.create({
-      data: buildQuestionBankCreateData(validation.data, { defaultSourceQuality: "manual" }),
+      data: buildQuestionBankCreateData(validation.data, { defaultSourceQuality: "manual", sourceKind: "manual" }),
       select: {
         id: true,
       },
@@ -354,7 +331,7 @@ export async function updateQuestionBankItem(input: UpdateQuestionInput): Promis
 
   await prisma.questionBankItem.update({
     where: { id: questionId },
-    data: buildQuestionBankUpdateData(validation.data),
+    data: buildQuestionBankUpdateData(validation.data, { defaultSourceQuality: "manual", sourceKind: "manual" }),
   });
 
   return {

@@ -83,11 +83,15 @@ describe("validateAndNormalizeQuestionInput", () => {
   });
 
   it("import vs manual only changes default sourceQuality on same normalized row", () => {
-    const v = validateAndNormalizeQuestionInput(validBase);
+    const v = validateAndNormalizeQuestionInput({
+      ...validBase,
+      skillKey: "grammar.verb-control",
+      moduleKey: "phase1-core-grammar-control",
+    });
     expect(v.ok).toBe(true);
     if (!v.ok) return;
-    const manual = buildQuestionBankCreateData(v.data, { defaultSourceQuality: "manual" });
-    const json = buildQuestionBankCreateData(v.data, { defaultSourceQuality: "import_json" });
+    const manual = buildQuestionBankCreateData(v.data, { sourceKind: "manual" });
+    const json = buildQuestionBankCreateData(v.data, { sourceKind: "import_json" });
     expect(manual.questionText).toBe(v.data.questionText);
     expect(json.questionText).toBe(v.data.questionText);
     expect(manual.sourceQuality).toBe("manual");

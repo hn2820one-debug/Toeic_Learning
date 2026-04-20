@@ -3,9 +3,12 @@ import { buildQuestionBankCreateData } from "@/lib/question-management";
 import { logOpsError, logOpsWarn } from "@/lib/ops-log";
 import {
   formatQuestionValidationMessage,
-  type NormalizedQuestionFields,
   validateAndNormalizeQuestionInput,
 } from "@/lib/question-fields";
+import {
+  applyQuestionFieldDefaults,
+  type QuestionBankExtraInput,
+} from "@/lib/question-bank/normalize-input";
 
 export const QUESTION_IMPORT_EXAMPLE = `[
   {
@@ -36,7 +39,10 @@ export type ImportResult = {
   summary?: ImportSummary;
 };
 
-type ImportableQuestion = NormalizedQuestionFields;
+type ImportableQuestion = {
+  normalized: import("@/lib/question-fields").NormalizedQuestionFields;
+  extra: QuestionBankExtraInput;
+};
 
 function buildErrorResult(message: string, summary?: ImportSummary): ImportResult {
   return {
@@ -62,6 +68,23 @@ function buildWarningResult(message: string, summary: ImportSummary): ImportResu
   };
 }
 
+function extractQuestionBankExtra(value: Record<string, unknown>): QuestionBankExtraInput {
+  return {
+    notes: typeof value.notes === "string" ? value.notes : undefined,
+    part: typeof value.part === "number" ? value.part : undefined,
+    primaryLearningSkillCode:
+      typeof value.primaryLearningSkillCode === "string" ? value.primaryLearningSkillCode : undefined,
+    coreRule: typeof value.coreRule === "string" ? value.coreRule : undefined,
+    recognitionSignal: typeof value.recognitionSignal === "string" ? value.recognitionSignal : undefined,
+    hint1: typeof value.hint1 === "string" ? value.hint1 : undefined,
+    hint2: typeof value.hint2 === "string" ? value.hint2 : undefined,
+    hint3: typeof value.hint3 === "string" ? value.hint3 : undefined,
+    distractorAnalysisJson: value.distractorAnalysisJson ?? value.distractorAnalysis,
+    registerLevel: typeof value.registerLevel === "string" ? value.registerLevel : undefined,
+    industryFocus: typeof value.industryFocus === "string" ? value.industryFocus : undefined,
+  };
+}
+
 function validateImportRow(record: unknown, rowNumber: number) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     return {
@@ -71,22 +94,24 @@ function validateImportRow(record: unknown, rowNumber: number) {
   }
 
   const value = record as Record<string, unknown>;
-  const validation = validateAndNormalizeQuestionInput({
-    questionText: value.questionText,
-    optionA: value.optionA,
-    optionB: value.optionB,
-    optionC: value.optionC,
-    optionD: value.optionD,
-    correctAnswer: value.correctAnswer,
-    explanation: value.explanation,
-    topic: value.topic,
-    difficulty: value.difficulty,
-    skillKey: value.skillKey,
-    topicKey: value.topicKey,
-    moduleKey: value.moduleKey,
-    sourceQuality: value.sourceQuality,
-    priorKnown: value.priorKnown,
-  });
+  const validation = validateAndNormalizeQuestionInput(
+    applyQuestionFieldDefaults({
+      questionText: value.questionText,
+      optionA: value.optionA,
+      optionB: value.optionB,
+      optionC: value.optionC,
+      optionD: value.optionD,
+      correctAnswer: value.correctAnswer,
+      explanation: value.explanation,
+      topic: value.topic,
+      difficulty: value.difficulty,
+      skillKey: value.skillKey,
+      topicKey: value.topicKey,
+      moduleKey: value.moduleKey,
+      sourceQuality: value.sourceQuality,
+      priorKnown: value.priorKnown,
+    }),
+  );
 
   if (!validation.ok) {
     return {
@@ -97,7 +122,10 @@ function validateImportRow(record: unknown, rowNumber: number) {
 
   return {
     ok: true as const,
-    data: validation.data,
+    data: {
+      normalized: validation.data,
+      extra: extractQuestionBankExtra(value),
+    },
   };
 }
 
@@ -183,7 +211,7 @@ export async function importQuestionBankRecords(records: unknown[]): Promise<Imp
     ? await prisma.questionBankItem.findMany({
         where: {
           questionText: {
-            in: Array.from(new Set(validRows.map((row) => row.questionText))),
+            in: Array.from(new Set(validRows.map((row) => row.normalized.questionText))),
           },
         },
         select: {
@@ -197,12 +225,12 @@ export async function importQuestionBankRecords(records: unknown[]): Promise<Imp
   let skippedCount = 0;
 
   for (const row of validRows) {
-    if (seenQuestionTexts.has(row.questionText)) {
+    if (seenQuestionTexts.has(row.normalized.questionText)) {
       skippedCount += 1;
       continue;
     }
 
-    seenQuestionTexts.add(row.questionText);
+    seenQuestionTexts.add(row.normalized.questionText);
     rowsToCreate.push(row);
   }
 
@@ -211,7 +239,12 @@ export async function importQuestionBankRecords(records: unknown[]): Promise<Imp
     for (let i = 0; i < rowsToCreate.length; i += BATCH) {
       const batch = rowsToCreate.slice(i, i + BATCH);
       await prisma.questionBankItem.createMany({
-        data: batch.map((row) => buildQuestionBankCreateData(row, { defaultSourceQuality: "import_json" })),
+        data: batch.map((row) =>
+          buildQuestionBankCreateData(row.normalized, {
+            sourceKind: "import_json",
+            extra: row.extra,
+          }),
+        ),
       });
     }
   }

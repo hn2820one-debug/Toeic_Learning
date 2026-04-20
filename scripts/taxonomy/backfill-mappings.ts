@@ -118,7 +118,8 @@ export function inferTopicKeyFromTopicColumn(topic: string): TopicInference {
   };
 }
 
-function normalizeForSubFocusCompare(s: string): string {
+/** Normalized sub-focus label for stable map keys (shared with learning-skill backfill). */
+export function normalizeForSubFocusCompare(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 

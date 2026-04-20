@@ -20,3 +20,6 @@ Background/
 Prompt
 
 /generated/prisma
+
+# One-off script output (taxonomy backfill)
+artifacts/

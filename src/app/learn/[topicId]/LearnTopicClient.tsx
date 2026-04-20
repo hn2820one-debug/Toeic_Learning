@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 
 import DisplayLessonBlockView from "@/components/learn/DisplayLessonBlockView";
+import PredictionPreferenceToggle from "@/components/practice/PredictionPreferenceToggle";
 import LessonProgressHeader from "@/components/learn/LessonProgressHeader";
 import AppCard from "@/components/ui/AppCard";
 import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
@@ -213,6 +214,10 @@ export default function LearnTopicClient({
           lessonTitleEn={current?.titleEn}
         />
 
+        <div className="flex justify-end">
+          <PredictionPreferenceToggle className="text-slate-500" />
+        </div>
+
         <div className="min-h-[12rem]">
           {!current?.bodyMarkdown?.trim() ? (
             <AppCard padding="md" className="border-slate-200 bg-white/90">
@@ -225,7 +230,7 @@ export default function LearnTopicClient({
               <p className="text-sm text-slate-700">無法顯示此節教學步驟。Unable to render lesson steps.</p>
             </AppCard>
           ) : (
-            <DisplayLessonBlockView block={activeBlock} />
+            <DisplayLessonBlockView block={activeBlock} topicKey={topicKey} />
           )}
         </div>
 

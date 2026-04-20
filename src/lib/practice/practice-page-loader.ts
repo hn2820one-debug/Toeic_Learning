@@ -18,6 +18,7 @@ import { parsePracticeItemState } from "@/lib/practice/practice-state";
 import { prisma } from "@/lib/prisma";
 import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
 import { getCompletionNextStep, type CompletionNextStep } from "@/lib/session-summary";
+import { buildPracticePredictionPayload, type PredictionPayload } from "@/lib/practice/prediction";
 
 function isPhase1TopicKey(id: string): id is Phase1TopicKey {
   return (PHASE1_TOPIC_KEYS_IN_ORDER as readonly string[]).includes(id);
@@ -36,6 +37,8 @@ export type PracticeQuestionPayload = {
   correctAnswer: string;
   /** Neutral in-session reinforcement label (variant revisit). */
   reinforceBannerZh?: string;
+  /** Optional think-first step (early items only); client may still respect user preference. */
+  prediction?: PredictionPayload;
 };
 
 export type PracticeCompletedSummary = {
@@ -130,6 +133,8 @@ export async function getPracticePageView(params: {
 
   const tk = (session.topicKey as Phase1TopicKey | null) ?? topicKey;
 
+  const totalN = session.items.length;
+
   const questions: PracticeQuestionPayload[] = session.items.map((it) => {
     const st = parsePracticeItemState(it.practiceStateJson);
     const q = it.question;
@@ -144,6 +149,15 @@ export async function getPracticePageView(params: {
       notes: q.notes,
     };
     const adaptive = generateAdaptiveHint(src);
+    const prediction = buildPracticePredictionPayload({
+      questionText: q.questionText,
+      skillKey: q.skillKey,
+      topicKey: q.topicKey,
+      topic: q.topic,
+      position: it.position,
+      totalItems: totalN,
+      reinforceBannerZh: st.reinforceBannerZh,
+    });
     return {
       id: q.id,
       position: it.position,
@@ -162,6 +176,7 @@ export async function getPracticePageView(params: {
       explanation: q.explanation,
       correctAnswer: q.correctAnswer,
       ...(st.reinforceBannerZh ? { reinforceBannerZh: st.reinforceBannerZh } : {}),
+      ...(prediction ? { prediction } : {}),
     };
   });
 

@@ -1,6 +1,11 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
+import PredictionStep from "@/components/practice/PredictionStep";
+import { usePredictionPreference } from "@/components/practice/PredictionPreferenceToggle";
 import type { DisplayLessonBlock } from "@/lib/learn/lesson-display";
+import { buildMicroCheckPredictionPayload } from "@/lib/practice/prediction";
 import SectionLabel from "@/components/ui/section-label";
 import { LearningSurface } from "@/components/ui/learning-surface";
 import CollapsibleNote from "@/components/ui/collapsible-note";
@@ -12,14 +17,72 @@ import TeachingMarkdown from "./TeachingMarkdown";
 const MD_SHORT =
   "prose-slate max-w-prose text-[15px] leading-relaxed text-slate-800 [&_p]:my-2 [&_li]:my-1 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:text-slate-900";
 
+function MicroCheckBlock({
+  block,
+  topicKey,
+}: {
+  block: Extract<DisplayLessonBlock, { type: "micro_check" }>;
+  topicKey?: string;
+}) {
+  const [predictionPref] = usePredictionPreference();
+  const pred = useMemo(() => buildMicroCheckPredictionPayload(block.question, topicKey), [block.question, topicKey]);
+  const [unlocked, setUnlocked] = useState(false);
+
+  useEffect(() => {
+    setUnlocked(false);
+  }, [block.question]);
+
+  const showPrediction = predictionPref && pred != null && !unlocked;
+  const showListedOptions = !showPrediction;
+
+  return (
+    <LearningSurface>
+      <div className="space-y-3">
+        <SectionLabel kind="micro" />
+        <LessonCard
+          eyebrow={<span>10 秒自測 · Micro check</span>}
+          title="先自己想，再揭曉"
+          className="border-violet-200/90 bg-violet-50/35"
+        >
+          <p className="text-base font-semibold leading-snug text-slate-900">{block.question}</p>
+          {showPrediction && pred ? (
+            <div className="mt-4">
+              <PredictionStep
+                payload={pred}
+                onContinue={() => setUnlocked(true)}
+                compactHintZh="先諗結構，再睇下面選項。"
+              />
+            </div>
+          ) : null}
+          {showListedOptions && block.options != null && block.options.length > 0 ? (
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-800">
+              {block.options.map((o, i) => (
+                <li key={i}>{o}</li>
+              ))}
+            </ol>
+          ) : null}
+          {showListedOptions ? (
+            <CollapsibleNote summaryZh="查看答案（建議先想 10 秒）" summaryEn="Reveal answer" defaultOpen={false}>
+              <p className="text-sm font-semibold text-violet-950">參考答案：{block.answer}</p>
+              {block.explanation.trim() ? <SafeMarkdown markdown={block.explanation} className={`mt-2 ${MD_SHORT}`} /> : null}
+            </CollapsibleNote>
+          ) : null}
+        </LessonCard>
+      </div>
+    </LearningSurface>
+  );
+}
+
 type DisplayLessonBlockViewProps = {
   block: DisplayLessonBlock;
+  /** Improves prediction heuristics for micro-check. */
+  topicKey?: string;
 };
 
 /**
  * Renders one pedagogical display block — layered labels, soft surfaces, no raw doc wall.
  */
-export default function DisplayLessonBlockView({ block }: DisplayLessonBlockViewProps) {
+export default function DisplayLessonBlockView({ block, topicKey }: DisplayLessonBlockViewProps) {
   switch (block.type) {
     case "example_pair":
       return (
@@ -149,35 +212,7 @@ export default function DisplayLessonBlockView({ block }: DisplayLessonBlockView
       );
 
     case "micro_check":
-      return (
-        <LearningSurface>
-          <div className="space-y-3">
-            <SectionLabel kind="micro" />
-            <LessonCard
-              eyebrow={
-                <span>
-                  10 秒自測 · Micro check
-                </span>
-              }
-              title="先自己想，再揭曉"
-              className="border-violet-200/90 bg-violet-50/35"
-            >
-              <p className="text-base font-semibold leading-snug text-slate-900">{block.question}</p>
-              {block.options != null && block.options.length > 0 ? (
-                <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-800">
-                  {block.options.map((o, i) => (
-                    <li key={i}>{o}</li>
-                  ))}
-                </ol>
-              ) : null}
-              <CollapsibleNote summaryZh="查看答案（建議先想 10 秒）" summaryEn="Reveal answer" defaultOpen={false}>
-                <p className="text-sm font-semibold text-violet-950">參考答案：{block.answer}</p>
-                {block.explanation.trim() ? <SafeMarkdown markdown={block.explanation} className={`mt-2 ${MD_SHORT}`} /> : null}
-              </CollapsibleNote>
-            </LessonCard>
-          </div>
-        </LearningSurface>
-      );
+      return <MicroCheckBlock block={block} topicKey={topicKey} />;
 
     default:
       return null;

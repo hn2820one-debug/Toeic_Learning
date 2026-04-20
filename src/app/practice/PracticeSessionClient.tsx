@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
+import PredictionPreferenceToggle, { usePredictionPreference } from "@/components/practice/PredictionPreferenceToggle";
+import PredictionStep from "@/components/practice/PredictionStep";
 import ChoiceFeedbackPanel from "@/components/session/ChoiceFeedbackPanel";
 import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
@@ -51,6 +53,8 @@ export default function PracticeSessionClient({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [localReveal, setLocalReveal] = useState<string | null>(null);
+  const [predictionPref] = usePredictionPreference();
+  const [predictionGateDone, setPredictionGateDone] = useState(false);
 
   const n = questions.length;
   const safePos = n === 0 ? 0 : Math.min(Math.max(0, initialPos), n - 1);
@@ -62,6 +66,32 @@ export default function PracticeSessionClient({
   const st = states[safePos] ?? parsePracticeItemState(null);
   const isLast = n > 0 && safePos === n - 1;
   const hintsDisabled = isLast;
+
+  const showPredictionStep =
+    predictionPref &&
+    st.status === "open" &&
+    q.prediction != null &&
+    !predictionGateDone;
+
+  const markPredictionDone = () => {
+    try {
+      sessionStorage.setItem(`toeic:practicePred:${sessionId}:${safePos}`, "1");
+    } catch {
+      /* ignore */
+    }
+    setPredictionGateDone(true);
+  };
+
+  useEffect(() => {
+    setPredictionGateDone(false);
+    try {
+      if (sessionStorage.getItem(`toeic:practicePred:${sessionId}:${safePos}`) === "1") {
+        setPredictionGateDone(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [sessionId, safePos]);
 
   const allResolved =
     n > 0 && states.every((s) => s.status === "solved" || s.status === "revealed");
@@ -199,6 +229,9 @@ export default function PracticeSessionClient({
           subtitleZh={`已用提示層數 ${st.maxHintLayerSeen} · 本題嘗試 ${st.attempts.length} / 3`}
           topicOrModuleLabel="腳手架練習"
         />
+        <div className="mt-2 flex justify-end">
+          <PredictionPreferenceToggle />
+        </div>
       </LearningSurface>
 
       <LearningSurface>
@@ -213,6 +246,17 @@ export default function PracticeSessionClient({
           <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
         </div>
 
+        {showPredictionStep && q.prediction ? (
+          <div className="mt-5">
+            <PredictionStep
+              payload={q.prediction}
+              onContinue={markPredictionDone}
+              compactHintZh="先諗，唔使即刻答選項。"
+            />
+          </div>
+        ) : null}
+
+        {!showPredictionStep ? (
         <div className="mt-6 space-y-3">
           <SectionLabel kind="options" />
           <div className="grid gap-2 sm:grid-cols-2">
@@ -230,6 +274,7 @@ export default function PracticeSessionClient({
           ))}
           </div>
         </div>
+        ) : null}
 
         {choiceFeedback && st.status === "open" && lastAttempt && !lastAttempt.correct ? (
           <div className="mt-6">
@@ -237,7 +282,7 @@ export default function PracticeSessionClient({
           </div>
         ) : null}
 
-        {!hintsDisabled && st.status === "open" ? (
+        {!hintsDisabled && st.status === "open" && !showPredictionStep ? (
           <div className="mt-6 border-t border-dashed border-slate-200/90 pt-6 opacity-95">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <SectionLabel kind="hint" />
@@ -279,7 +324,7 @@ export default function PracticeSessionClient({
               <p className="mt-2 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level3}</p>
             ) : null}
           </div>
-        ) : hintsDisabled ? (
+        ) : hintsDisabled && !showPredictionStep ? (
           <p className="mt-6 text-xs font-medium text-slate-500">最後一題：不提供提示層（預熱）。</p>
         ) : null}
 

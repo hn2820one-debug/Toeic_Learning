@@ -5,6 +5,7 @@ import AppCard from "@/components/ui/AppCard";
 import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
+import PredictionPreferenceToggle from "@/components/practice/PredictionPreferenceToggle";
 import { getPracticePageView } from "@/lib/practice/practice-page-loader";
 
 import PracticeSessionClient, { PracticeStartClient } from "./PracticeSessionClient";
@@ -86,6 +87,9 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
           </Link>
         </AppCard>
         <AppCard padding="md">
+          <div className="mb-4 flex justify-end">
+            <PredictionPreferenceToggle />
+          </div>
           {view.resumeCandidate ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
               <p className="font-semibold">偵測到未完成練習</p>

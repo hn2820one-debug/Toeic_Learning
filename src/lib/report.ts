@@ -7,6 +7,10 @@ export type WeeklyReportSummary = {
   totalQuestionsAnswered: number;
   totalCorrectAnswers: number;
   accuracy: number;
+  /** Closed-loop items only — see `analytics/hesitation`. */
+  masteryFluent: number;
+  masteryHesitant: number;
+  masteryStruggling: number;
 };
 
 export type WeeklyReportTopic = {
@@ -70,6 +74,9 @@ export async function getWeeklyReportData(now = new Date()): Promise<WeeklyRepor
       totalQuestionsAnswered: stats7d.totalQuestions,
       totalCorrectAnswers: stats7d.correctAnswers,
       accuracy: stats7d.accuracy,
+      masteryFluent: stats7d.masteryFluent,
+      masteryHesitant: stats7d.masteryHesitant,
+      masteryStruggling: stats7d.masteryStruggling,
     },
     topicBreakdown,
     hasData: stats7d.completedSessions > 0,

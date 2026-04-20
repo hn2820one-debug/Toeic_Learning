@@ -158,6 +158,7 @@ export async function submitWarmupAnswer(
   const correct = normalized === q.correctAnswer.trim().toUpperCase();
   const hintsAtSubmit = state.maxHintLayerSeen;
   const now = new Date().toISOString();
+  const firstOpenedAt = state.firstOpenedAt ?? now;
 
   const attempts = [
     ...state.attempts,
@@ -167,6 +168,7 @@ export async function submitWarmupAnswer(
   if (correct) {
     const next: PracticeItemState = {
       ...state,
+      firstOpenedAt,
       attempts,
       status: "solved",
       lastSubmitKey: normalizedSubmitKey,
@@ -199,6 +201,7 @@ export async function submitWarmupAnswer(
 
     const next: PracticeItemState = {
       ...state,
+      firstOpenedAt,
       attempts,
       status: "revealed",
       lastSubmitKey: normalizedSubmitKey,
@@ -213,6 +216,7 @@ export async function submitWarmupAnswer(
 
   const next: PracticeItemState = {
     ...state,
+    firstOpenedAt,
     attempts,
     lastSubmitKey: normalizedSubmitKey,
   };

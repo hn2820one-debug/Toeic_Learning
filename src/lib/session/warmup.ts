@@ -10,6 +10,7 @@
  */
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
+import { practiceItemLooksHesitant } from "@/lib/analytics/hesitation";
 import { parsePracticeItemState, type PracticeItemState } from "@/lib/practice/practice-state";
 import { prisma } from "@/lib/prisma";
 import { parseTestItemState } from "@/lib/test-mode";
@@ -43,16 +44,6 @@ function isPracticeWrong(st: PracticeItemState): boolean {
     return st.attempts.some((a) => !a.correct);
   }
   return false;
-}
-
-function isPracticeHesitation(st: PracticeItemState): boolean {
-  if (st.status !== "solved") {
-    return false;
-  }
-  if (st.attempts.length > 1) {
-    return true;
-  }
-  return st.attempts.some((a) => (a.hintsAtSubmit ?? 0) > 0);
 }
 
 async function pickAbFromTopic(topicKey: Phase1TopicKey, used: Set<number>): Promise<number | null> {
@@ -144,7 +135,7 @@ export async function selectWarmupQuestionIds(
     if (last.mode === "practice") {
       for (const it of last.items) {
         const st = parsePracticeItemState(it.practiceStateJson);
-        if (isPracticeHesitation(st) && !used.has(it.questionBankItemId)) {
+        if (practiceItemLooksHesitant(st) && !used.has(it.questionBankItemId)) {
           used.add(it.questionBankItemId);
           slots.push("last_session_hesitation");
           break;

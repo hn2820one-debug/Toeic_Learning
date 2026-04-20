@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+import ChoiceFeedbackPanel from "@/components/session/ChoiceFeedbackPanel";
 import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
 import CollapsibleNote from "@/components/ui/collapsible-note";
@@ -11,6 +12,7 @@ import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-su
 import SectionLabel from "@/components/ui/section-label";
 import type { PracticeCompletedSummary, PracticeQuestionPayload } from "@/lib/practice/practice-page-loader";
 import { parsePracticeItemState } from "@/lib/practice/practice-state";
+import { buildChoiceFeedback } from "@/lib/choice-feedback";
 import { splitExplanationForFeedback } from "@/lib/explanation-split";
 import type { CompletionNextStep } from "@/lib/session-summary";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
@@ -113,6 +115,26 @@ export default function PracticeSessionClient({
               </li>
             ) : null}
           </ul>
+          {completedSummary.hesitation ? (
+            <div className="mt-4 rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-3 text-sm text-violet-950">
+              <p className="font-semibold text-violet-900">掌握訊號 · Mastery（非只有對／錯）</p>
+              <ul className="mt-2 space-y-1">
+                <li>
+                  已掌握（快而準）· Fluent: {completedSummary.hesitation.summary.fluent}
+                </li>
+                <li>
+                  半掌握（答對但未熟：慢／提示／重試）· Hesitant:{" "}
+                  {completedSummary.hesitation.summary.hesitant}
+                </li>
+                <li>
+                  未掌握（錯／未解出）· Not yet: {completedSummary.hesitation.summary.struggling}
+                </li>
+              </ul>
+              <p className="mt-2 text-xs text-violet-800/90">
+                半掌握題會列入熱身與練習補強候選，但不等同錯題。
+              </p>
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
               href={nextStep?.href ?? `/test?topicKey=${encodeURIComponent(topicKey)}`}
@@ -150,7 +172,21 @@ export default function PracticeSessionClient({
   }
 
   const lastAttempt = st.attempts.length > 0 ? st.attempts[st.attempts.length - 1]! : null;
-  const expl = splitExplanationForFeedback(q.explanation);
+  const expl = useMemo(() => splitExplanationForFeedback(q.explanation), [q.explanation]);
+  const choiceFeedback = useMemo(() => {
+    if (!lastAttempt) return null;
+    return buildChoiceFeedback({
+      questionText: q.questionText,
+      optionA: q.optionA,
+      optionB: q.optionB,
+      optionC: q.optionC,
+      optionD: q.optionD,
+      selectedChoice: lastAttempt.choice,
+      correctChoice: q.correctAnswer,
+      isCorrect: lastAttempt.correct === true,
+      explanation: q.explanation,
+    });
+  }, [lastAttempt, q]);
 
   return (
     <div className="space-y-6">
@@ -189,6 +225,12 @@ export default function PracticeSessionClient({
           ))}
           </div>
         </div>
+
+        {choiceFeedback && st.status === "open" && lastAttempt && !lastAttempt.correct ? (
+          <div className="mt-6">
+            <ChoiceFeedbackPanel feedback={choiceFeedback} tone="wrong" />
+          </div>
+        ) : null}
 
         {!hintsDisabled && st.status === "open" ? (
           <div className="mt-6 border-t border-dashed border-slate-200/90 pt-6 opacity-95">
@@ -239,24 +281,17 @@ export default function PracticeSessionClient({
         {st.status !== "open" ? (
           <div className="mt-6 space-y-4 rounded-2xl border border-sky-100/90 bg-sky-50/35 p-4">
             <SectionLabel kind="feedback" />
-            <dl className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
-                <dt className="text-xs text-slate-500">你選了 · Yours</dt>
-                <dd className="font-mono text-sm font-semibold text-slate-900">{lastAttempt?.choice ?? "—"}</dd>
-              </div>
-              <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
-                <dt className="text-xs text-slate-500">正解 · Correct</dt>
-                <dd className="font-mono text-sm font-semibold text-emerald-800">{q.correctAnswer}</dd>
-              </div>
-              <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
-                <dt className="text-xs text-slate-500">首答 · First try</dt>
-                <dd className="text-sm font-semibold text-slate-800">{lastAttempt?.correct === true ? "✓" : lastAttempt?.correct === false ? "✗" : "—"}</dd>
-              </div>
-            </dl>
-            {expl.summary ? (
-              <p className="max-w-prose text-sm leading-relaxed text-slate-800">
-                <span className="font-semibold text-slate-600">關鍵差別 · Key:</span> {expl.summary}
+            <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
+              <p className="text-xs text-slate-500">首答 · First try</p>
+              <p className="text-sm font-semibold text-slate-800">
+                {lastAttempt?.correct === true ? "✓" : lastAttempt?.correct === false ? "✗" : "—"}
               </p>
+            </div>
+            {choiceFeedback ? (
+              <ChoiceFeedbackPanel
+                feedback={choiceFeedback}
+                tone={lastAttempt?.correct === true ? "correct" : "wrong"}
+              />
             ) : null}
             {expl.detail.trim().length > 0 ? (
               <CollapsibleNote summaryZh="進一步說明" summaryEn="More detail">

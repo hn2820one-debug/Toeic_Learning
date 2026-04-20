@@ -40,6 +40,15 @@ export default async function ProgressPage() {
       ) : null}
 
       <LearningSurface>
+      <AppCard padding="md" className="mb-6 border-violet-100 bg-violet-50/50">
+        <p className="text-sm text-violet-950">
+          除了對／錯，系統也會標示「半掌握」（答對但慢、靠提示或重試才對）。詳見{" "}
+          <Link href="/analysis" className="font-semibold text-primary-700 underline">
+            錯題分析
+          </Link>
+          與週報。
+        </p>
+      </AppCard>
       {/* Overview */}
       <section className="mb-8">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">整體總覽 · Overview</h2>

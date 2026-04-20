@@ -10,6 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { parseReviewItemState } from "@/lib/review-mode";
 import { parseTestItemState } from "@/lib/test-mode";
 
+import { aggregateHesitationTiersForUserWindow } from "@/lib/analytics/hesitation-aggregate";
+
 import {
   aggregateRecentLearningStats,
   buildWeeklyReportData,
@@ -133,20 +135,37 @@ export async function getAnalysisPageData(): Promise<AnalysisPageData> {
     getLearnDashboardData(),
   ]);
 
-  const stats7d = aggregateRecentLearningStats({
+  const [hes7, hes30] = await Promise.all([
+    userId ? aggregateHesitationTiersForUserWindow(userId, toWindowStart(7)) : null,
+    userId ? aggregateHesitationTiersForUserWindow(userId, toWindowStart(30)) : null,
+  ]);
+
+  const base7 = aggregateRecentLearningStats({
     windowDays: 7,
     sessions: d7.sessions,
     answers: d7.answers,
     timedBehaviors: d7.timedBehaviors,
     dueBacklog: d7.dueBacklog,
   });
-  const stats30d = aggregateRecentLearningStats({
+  const stats7d = {
+    ...base7,
+    masteryFluent: hes7?.fluent ?? 0,
+    masteryHesitant: hes7?.hesitant ?? 0,
+    masteryStruggling: hes7?.struggling ?? 0,
+  };
+  const base30 = aggregateRecentLearningStats({
     windowDays: 30,
     sessions: d30.sessions,
     answers: d30.answers,
     timedBehaviors: d30.timedBehaviors,
     dueBacklog: d30.dueBacklog,
   });
+  const stats30d = {
+    ...base30,
+    masteryFluent: hes30?.fluent ?? 0,
+    masteryHesitant: hes30?.hesitant ?? 0,
+    masteryStruggling: hes30?.struggling ?? 0,
+  };
 
   const weakTopics = rankWeakTopics({ answers: d30.answers, topN: 5 });
   const errorPatterns = classifyErrorPatterns({ answers: d30.answers, timedBehaviors: d30.timedBehaviors });

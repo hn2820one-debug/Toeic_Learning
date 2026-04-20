@@ -32,6 +32,10 @@ export default async function AnalysisPage() {
             <li>total questions：{data.stats7d.totalQuestions}</li>
             <li>accuracy：{data.stats7d.accuracy}%</li>
             <li>timeout / slow：{data.stats7d.timeoutCount} / {data.stats7d.slowAnswerCount}</li>
+            <li>
+              掌握訊號（閉環題）：已掌握 {data.stats7d.masteryFluent} · 半掌握 {data.stats7d.masteryHesitant} · 未掌握{" "}
+              {data.stats7d.masteryStruggling}
+            </li>
             <li>review 完成數：{data.stats7d.reviewCompletedCount}</li>
             <li>due backlog：{data.stats7d.dueBacklog}</li>
           </ul>
@@ -43,6 +47,10 @@ export default async function AnalysisPage() {
             <li>total questions：{data.stats30d.totalQuestions}</li>
             <li>accuracy：{data.stats30d.accuracy}%</li>
             <li>timeout / slow：{data.stats30d.timeoutCount} / {data.stats30d.slowAnswerCount}</li>
+            <li>
+              掌握訊號（閉環題）：已掌握 {data.stats30d.masteryFluent} · 半掌握 {data.stats30d.masteryHesitant} · 未掌握{" "}
+              {data.stats30d.masteryStruggling}
+            </li>
             <li>review 完成數：{data.stats30d.reviewCompletedCount}</li>
             <li>due backlog：{data.stats30d.dueBacklog}</li>
           </ul>

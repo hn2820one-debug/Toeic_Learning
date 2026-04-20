@@ -32,6 +32,10 @@ export type RecentLearningStats = {
   slowAnswerCount: number;
   reviewCompletedCount: number;
   dueBacklog: number;
+  /** From closed-loop items: 快而準 / 答對但未熟 / 未掌握 — see `analytics/hesitation`. */
+  masteryFluent: number;
+  masteryHesitant: number;
+  masteryStruggling: number;
 };
 
 export type WeakTopicRecommendation = "practice" | "test" | "review";
@@ -119,6 +123,9 @@ export function aggregateRecentLearningStats(input: {
     slowAnswerCount,
     reviewCompletedCount,
     dueBacklog: input.dueBacklog,
+    masteryFluent: 0,
+    masteryHesitant: 0,
+    masteryStruggling: 0,
   };
 }
 

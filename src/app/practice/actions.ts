@@ -62,7 +62,7 @@ export async function startPracticeSession(topicKey: string): Promise<PracticeAc
   await ensureLearningTopic(topicKey);
   const mod = primaryModuleForTopic(topicKey);
 
-  const ids = await selectPracticeQuestionIds(topicKey);
+  const ids = await selectPracticeQuestionIds(topicKey, { userId: user.id });
   if (ids.length === 0) {
     return { ok: false, error: "no_questions" };
   }
@@ -152,6 +152,7 @@ export async function revealPracticeHint(
   const now = new Date().toISOString();
   const next: PracticeItemState = {
     ...state,
+    firstOpenedAt: state.firstOpenedAt ?? now,
     maxHintLayerSeen: layer,
     hintViews: [...state.hintViews, { layer, at: now }],
   };
@@ -213,6 +214,7 @@ export async function submitPracticeAnswer(
   const correct = normalized === q.correctAnswer.trim().toUpperCase();
   const hintsAtSubmit = state.maxHintLayerSeen;
   const now = new Date().toISOString();
+  const firstOpenedAt = state.firstOpenedAt ?? now;
 
   const attempts = [
     ...state.attempts,
@@ -222,6 +224,7 @@ export async function submitPracticeAnswer(
   if (correct) {
     const next: PracticeItemState = {
       ...state,
+      firstOpenedAt,
       attempts,
       status: "solved",
       lastSubmitKey: normalizedSubmitKey,
@@ -254,6 +257,7 @@ export async function submitPracticeAnswer(
 
     const next: PracticeItemState = {
       ...state,
+      firstOpenedAt,
       attempts,
       status: "revealed",
       lastSubmitKey: normalizedSubmitKey,
@@ -268,6 +272,7 @@ export async function submitPracticeAnswer(
 
   const next: PracticeItemState = {
     ...state,
+    firstOpenedAt,
     attempts,
     lastSubmitKey: normalizedSubmitKey,
   };

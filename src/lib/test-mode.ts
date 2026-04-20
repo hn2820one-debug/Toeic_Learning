@@ -151,6 +151,17 @@ export type TestResultSummary = {
   passed: boolean;
   avgTimeTakenSec: number | null;
   perItem: TestPerItemResultRow[];
+  /** Present when computed on the server (fast/slow vs peers, timeouts, etc.). */
+  hesitation?: {
+    summary: { fluent: number; hesitant: number; struggling: number };
+    items: Array<{
+      position: number;
+      questionId: number;
+      tier: "fluent" | "hesitant" | "struggling";
+      reasons: string[];
+      resolveSec: number | null;
+    }>;
+  };
 };
 
 export function getTestResultSummary(params: {

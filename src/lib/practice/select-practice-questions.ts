@@ -55,7 +55,10 @@ async function nextBankId(
  *
  * Backfill order if pools are thin: same topic → related topics → any `skillKey` from host module → global bank.
  */
-export async function selectPracticeQuestionIds(topicKey: Phase1TopicKey): Promise<number[]> {
+export async function selectPracticeQuestionIds(
+  topicKey: Phase1TopicKey,
+  opts?: { userId?: number },
+): Promise<number[]> {
   const used = new Set<number>();
   const slots: number[] = [];
 
@@ -89,6 +92,14 @@ export async function selectPracticeQuestionIds(topicKey: Phase1TopicKey): Promi
       break;
     }
     push(id);
+  }
+
+  if (opts?.userId != null) {
+    const { findRecentHesitationQuestionIds } = await import("@/lib/analytics/hesitation-aggregate");
+    const hes = await findRecentHesitationQuestionIds(opts.userId, topicKey, 2);
+    for (const id of hes) {
+      push(id);
+    }
   }
 
   while (slots.length < 6) {

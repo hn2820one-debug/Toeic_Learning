@@ -3,6 +3,7 @@ import "server-only";
 import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
+import { buildTestSessionHesitationRows, summarizeMasteryTiers } from "@/lib/analytics/hesitation";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { getTestResultSummary, parseTestItemState, type TestResultSummary } from "@/lib/test-mode";
 import { prisma } from "@/lib/prisma";
@@ -151,7 +152,7 @@ export async function getTestPageView(params: {
       }
 
       if (session.status === "completed") {
-        const summary = getTestResultSummary({
+        const base = getTestResultSummary({
           items: session.items.map((it) => {
             const q = it.question;
             return {
@@ -167,6 +168,20 @@ export async function getTestPageView(params: {
             };
           }),
         });
+        const hesitationItems = buildTestSessionHesitationRows(session.items);
+        const summary: TestResultSummary = {
+          ...base,
+          hesitation: {
+            summary: summarizeMasteryTiers(hesitationItems),
+            items: hesitationItems.map((r) => ({
+              position: r.position,
+              questionId: r.questionId,
+              tier: r.tier,
+              reasons: r.reasons,
+              resolveSec: r.resolveSec,
+            })),
+          },
+        };
 
         const snap = await prisma.checkpointAttempt.findFirst({
           where: { learningSessionId: session.id },

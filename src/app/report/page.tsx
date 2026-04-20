@@ -81,6 +81,18 @@ export default async function ReportPage() {
                   </p>
                   <p className="text-2xl font-bold text-primary-900">{report.summary.accuracy}%</p>
                 </div>
+                <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-4 md:col-span-2 xl:col-span-4">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-800">
+                    掌握訊號（閉環題）· Mastery tiers
+                  </p>
+                  <p className="text-sm font-medium text-violet-950">
+                    已掌握 {report.summary.masteryFluent} · 半掌握 {report.summary.masteryHesitant} · 未掌握{" "}
+                    {report.summary.masteryStruggling}
+                  </p>
+                  <p className="mt-1 text-xs text-violet-800/90">
+                    半掌握 = 答對但未熟（慢／提示／重試等），與錯題分開統計。
+                  </p>
+                </div>
               </div>
             </AppCard>
 

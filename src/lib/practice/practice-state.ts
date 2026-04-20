@@ -22,6 +22,8 @@ export type PracticeItemState = {
   attempts: PracticeAttemptEntry[];
   status: PracticeItemStatus;
   lastSubmitKey?: string;
+  /** First user interaction on this item (hint or submit), ISO — used for hesitation / time-to-correct. */
+  firstOpenedAt?: string;
 };
 
 export const MAX_SUBMIT_ATTEMPTS = 3;
@@ -55,6 +57,7 @@ export function parsePracticeItemState(raw: unknown): PracticeItemState {
     attempts,
     status,
     lastSubmitKey: typeof o.lastSubmitKey === "string" ? o.lastSubmitKey : undefined,
+    firstOpenedAt: typeof o.firstOpenedAt === "string" ? o.firstOpenedAt : undefined,
   };
 }
 

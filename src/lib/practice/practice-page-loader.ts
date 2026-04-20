@@ -3,6 +3,11 @@ import "server-only";
 import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
+import {
+  buildPracticeSessionHesitationRows,
+  summarizeMasteryTiers,
+  type ItemHesitationResult,
+} from "@/lib/analytics/hesitation";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { generateAdaptiveHint } from "@/lib/llm/adaptive-hint";
 import {
@@ -37,6 +42,11 @@ export type PracticeCompletedSummary = {
   totalHintsUsed: number;
   hintPenalty: number;
   passed: boolean;
+  /** 答對但未熟（慢／提示／重試）— 非二分法對錯。 */
+  hesitation?: {
+    summary: { fluent: number; hesitant: number; struggling: number };
+    items: ItemHesitationResult[];
+  };
 };
 
 export type PracticePageView =
@@ -158,7 +168,15 @@ export async function getPracticePageView(params: {
   let nextStep: CompletionNextStep | undefined;
   if (session.status === "completed" && session.items.length > 0) {
     const states = session.items.map((it) => parsePracticeItemState(it.practiceStateJson));
-    completedSummary = computePracticeOutcome({ questions: outcomesFromItemStates(states) });
+    const base = computePracticeOutcome({ questions: outcomesFromItemStates(states) });
+    const hesitationItems = buildPracticeSessionHesitationRows(session.items);
+    completedSummary = {
+      ...base,
+      hesitation: {
+        summary: summarizeMasteryTiers(hesitationItems),
+        items: hesitationItems,
+      },
+    };
     nextStep = await getCompletionNextStep({
       defaultHref: `/learn/${encodeURIComponent(tk)}`,
       defaultTitleZh: "回主題學習",

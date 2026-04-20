@@ -16,6 +16,14 @@ export type QuestionDifficulty = (typeof QUESTION_DIFFICULTY_VALUES)[number];
 export type QuestionCorrectAnswer = (typeof QUESTION_CORRECT_ANSWER_VALUES)[number];
 export type QuestionSourceQuality = (typeof QUESTION_SOURCE_QUALITY_VALUES)[number];
 
+/**
+ * Uniqueness for manual create/update and import skip logic: exact string equality on the normalized stem
+ * (`normalizeQuestionText`) that is persisted as `QuestionBankItem.questionText`.
+ */
+export const DUPLICATE_QUESTION_TEXT_STRATEGY = "exact_normalized_stem_in_questionText_column" as const;
+
+export const DUPLICATE_QUESTION_TEXT_BODY = "Another question already uses the same questionText.";
+
 export type QuestionFieldInput = {
   questionText: unknown;
   optionA: unknown;
@@ -73,6 +81,16 @@ function normalizeRequiredString(value: unknown) {
   }
 
   const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+/** Stem: trim and collapse internal whitespace (aligned with topic normalization style). */
+export function normalizeQuestionText(value: unknown) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ");
   return normalized.length > 0 ? normalized : undefined;
 }
 
@@ -201,7 +219,7 @@ export function getNormalizedQuestionTopics(topics: Iterable<string>) {
 export function validateQuestionFields(
   input: QuestionFieldInput,
 ): { ok: true; data: NormalizedQuestionFields } | { ok: false; issue: QuestionValidationIssue } {
-  const questionText = normalizeRequiredString(input.questionText);
+  const questionText = normalizeQuestionText(input.questionText);
   const optionA = normalizeRequiredString(input.optionA);
   const optionB = normalizeRequiredString(input.optionB);
   const optionC = normalizeRequiredString(input.optionC);
@@ -311,14 +329,26 @@ export function validateQuestionFields(
   };
 }
 
+/** Single entry point for the normalize-first pipeline (alias of {@link validateQuestionFields}). */
+export const validateAndNormalizeQuestionInput = validateQuestionFields;
+
+/**
+ * Returns fully normalized fields only when validation passes; otherwise `null`.
+ * Use {@link validateAndNormalizeQuestionInput} when you need the failure reason.
+ */
+export function normalizeQuestionInput(input: QuestionFieldInput): NormalizedQuestionFields | null {
+  const result = validateQuestionFields(input);
+  return result.ok ? result.data : null;
+}
+
 export function formatQuestionValidationMessage(issue: QuestionValidationIssue, options?: { rowNumber?: number }) {
   const rowPrefix = options?.rowNumber ? `Row ${options.rowNumber} ` : "";
 
   switch (issue) {
     case "questionText":
       return options?.rowNumber
-        ? `${rowPrefix}is missing a non-empty questionText.`
-        : "questionText must remain non-empty.";
+        ? `${rowPrefix}is missing a non-empty questionText after trimming and normalizing whitespace.`
+        : "questionText must remain non-empty after trimming and normalizing whitespace.";
     case "options":
       return options?.rowNumber
         ? `${rowPrefix}must include non-empty optionA, optionB, optionC, and optionD values.`

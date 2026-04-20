@@ -3,7 +3,7 @@ import { buildQuestionBankCreateData } from "@/lib/question-management";
 import {
   formatQuestionValidationMessage,
   type NormalizedQuestionFields,
-  validateQuestionFields,
+  validateAndNormalizeQuestionInput,
 } from "@/lib/question-fields";
 
 export const QUESTION_IMPORT_EXAMPLE = `[
@@ -70,7 +70,7 @@ function validateImportRow(record: unknown, rowNumber: number) {
   }
 
   const value = record as Record<string, unknown>;
-  const validation = validateQuestionFields({
+  const validation = validateAndNormalizeQuestionInput({
     questionText: value.questionText,
     optionA: value.optionA,
     optionB: value.optionB,
@@ -110,11 +110,11 @@ function buildImportMessage(summary: ImportSummary, firstIssue?: string) {
   }
 
   if (summary.importedCount === 0 && summary.skippedCount > 0) {
-    return "No new questions were imported because all valid rows matched existing questionText values.";
+    return "No new questions were imported because all valid rows matched existing questionText values (same duplicate rule as manual create).";
   }
 
   if (summary.skippedCount > 0) {
-    return "Import completed successfully. Duplicate questionText values were skipped.";
+    return "Import completed successfully. Duplicate questionText values were skipped (same duplicate rule as manual create).";
   }
 
   return "Import completed successfully.";

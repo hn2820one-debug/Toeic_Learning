@@ -6,7 +6,7 @@ import {
   PERSONALIZED_PHASE1_BANK,
   summarizePersonalizedPhase1Bank,
 } from "../prisma/seed-data/personalized-phase1-bank";
-import { validateQuestionFields } from "../src/lib/question-fields";
+import { validateAndNormalizeQuestionInput } from "../src/lib/question-fields";
 
 const databaseUrl = process.env.DATABASE_URL ?? "file:./dev.db";
 const adapter = new PrismaLibSql({ url: databaseUrl });
@@ -36,14 +36,14 @@ function assertSeedBankIsSafe() {
 
   const seen = new Set<string>();
   for (const [index, row] of PERSONALIZED_PHASE1_BANK.entries()) {
-    const validation = validateQuestionFields(row);
+    const validation = validateAndNormalizeQuestionInput(row);
     if (!validation.ok) {
       throw new Error(`Bank row ${index + 1} failed validation (${validation.issue}).`);
     }
-    if (seen.has(row.questionText)) {
-      throw new Error(`Duplicate questionText detected at row ${index + 1}: ${row.questionText}`);
+    if (seen.has(validation.data.questionText)) {
+      throw new Error(`Duplicate questionText after normalization at row ${index + 1}: ${validation.data.questionText}`);
     }
-    seen.add(row.questionText);
+    seen.add(validation.data.questionText);
   }
 }
 

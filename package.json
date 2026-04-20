@@ -20,7 +20,10 @@
     "seed:fsrs": "tsx scripts/seed-fsrs-from-checkpoint.ts",
     "test:fsrs": "node --conditions=react-server --import tsx scripts/test-fsrs.ts",
     "test:llm-env": "tsx scripts/test-llm-env.ts",
-    "taxonomy:backfill": "tsx scripts/backfill-taxonomy.ts"
+    "taxonomy:backfill": "tsx scripts/backfill-taxonomy.ts",
+    "test:learning-path": "node --import tsx --test src/lib/learning-path.test.ts",
+    "test:import-normalization": "node --import tsx --test src/lib/question-import-pipeline.test.ts",
+    "generate:lessons": "tsx scripts/generate-lessons.ts"
   },
   "keywords": [],
   "author": "",
@@ -44,6 +47,8 @@
     "prisma": "^7.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
     "server-only": "^0.0.1",
     "tailwindcss": "^4.2.2",
     "ts-fsrs": "^5.3.2",

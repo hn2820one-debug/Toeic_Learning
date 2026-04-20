@@ -3,32 +3,44 @@ import "server-only";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import {
+  formatQuestionValidationMessage,
+  type NormalizedQuestionFields,
+  type QuestionFieldInput,
+  validateAndNormalizeQuestionInput,
+} from "@/lib/question-fields";
+import { buildQuestionBankCreateData } from "@/lib/question-management";
 
 import { rowSchema, type CsvValidRow } from "./csv-preview";
 
-function mapRowToCreate(r: CsvValidRow) {
-  const notes = r.grammarPoints?.trim()
-    ? r.grammarPoints
+function mapGrammarPointsToNotes(grammarPoints: string | undefined): string | null {
+  const notes = grammarPoints?.trim()
+    ? grammarPoints
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
         .join(", ")
     : null;
 
-  return {
+  return notes;
+}
+
+function csvRowToQuestionFieldInput(r: CsvValidRow): QuestionFieldInput {
+  const input: QuestionFieldInput = {
     questionText: r.questionText,
     optionA: r.optionA,
     optionB: r.optionB,
     optionC: r.optionC,
     optionD: r.optionD,
     correctAnswer: r.correctAnswer,
+    explanation: r.explanation ?? null,
     topic: r.topic,
     difficulty: r.difficulty,
-    explanation: r.explanation?.trim() ? r.explanation : null,
-    notes,
-    priorKnown: r.priorKnown === "true" ? true : r.priorKnown === "false" ? false : null,
-    sourceQuality: "import_csv",
+    priorKnown:
+      r.priorKnown === "true" ? true : r.priorKnown === "false" ? false : null,
   };
+
+  return input;
 }
 
 export type CsvCommitResult =
@@ -57,16 +69,33 @@ export async function commitCsvImport(token: string): Promise<CsvCommitResult> {
   const rows = parsedRows.data;
   const BATCH = 500;
 
-  const seen = new Set<string>();
-  const uniqueRows: CsvValidRow[] = [];
-  let skippedDuplicateInFile = 0;
+  const validatedRows: { csv: CsvValidRow; data: NormalizedQuestionFields }[] = [];
+
   for (const r of rows) {
-    if (seen.has(r.questionText)) {
+    const validation = validateAndNormalizeQuestionInput(csvRowToQuestionFieldInput(r));
+    if (!validation.ok) {
+      return {
+        ok: false,
+        error: `Row content failed the shared question pipeline: ${formatQuestionValidationMessage(validation.issue)}`,
+      };
+    }
+
+    validatedRows.push({ csv: r, data: validation.data });
+  }
+
+  const seen = new Set<string>();
+  const uniqueRows: typeof validatedRows = [];
+  let skippedDuplicateInFile = 0;
+
+  for (const row of validatedRows) {
+    const key = row.data.questionText;
+    if (seen.has(key)) {
       skippedDuplicateInFile += 1;
       continue;
     }
-    seen.add(r.questionText);
-    uniqueRows.push(r);
+
+    seen.add(key);
+    uniqueRows.push(row);
   }
 
   if (uniqueRows.length === 0) {
@@ -81,19 +110,22 @@ export async function commitCsvImport(token: string): Promise<CsvCommitResult> {
 
   const existing = await prisma.questionBankItem.findMany({
     where: {
-      questionText: { in: uniqueRows.map((r) => r.questionText) },
+      questionText: { in: uniqueRows.map((r) => r.data.questionText) },
     },
     select: { questionText: true },
   });
   const existingSet = new Set(existing.map((e) => e.questionText));
-  const toCreate = uniqueRows.filter((r) => !existingSet.has(r.questionText));
+  const toCreate = uniqueRows.filter((r) => !existingSet.has(r.data.questionText));
   const skippedExisting = uniqueRows.length - toCreate.length;
 
   let imported = 0;
   for (let i = 0; i < toCreate.length; i += BATCH) {
     const batch = toCreate.slice(i, i + BATCH);
     const result = await prisma.questionBankItem.createMany({
-      data: batch.map(mapRowToCreate),
+      data: batch.map(({ csv, data }) => ({
+        ...buildQuestionBankCreateData(data, { defaultSourceQuality: "import_csv" }),
+        notes: mapGrammarPointsToNotes(csv.grammarPoints),
+      })),
     });
     imported += result.count;
   }

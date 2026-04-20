@@ -48,7 +48,12 @@ export async function previewCsv(csvText: string): Promise<CsvPreviewResult> {
   const valid: CsvValidRow[] = [];
 
   (parsed.data as Record<string, string>[]).forEach((row, idx) => {
-    const result = rowSchema.safeParse(row);
+    const trimmed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(row)) {
+      trimmed[key] = typeof value === "string" ? value.trim() : value;
+    }
+
+    const result = rowSchema.safeParse(trimmed);
     if (result.success) {
       valid.push(result.data);
     } else {

@@ -2,10 +2,11 @@ import type { Prisma } from "../../generated/prisma";
 
 import { prisma } from "@/lib/prisma";
 import {
+  DUPLICATE_QUESTION_TEXT_BODY,
   formatQuestionValidationMessage,
   type NormalizedQuestionFields,
   type QuestionFieldInput,
-  validateQuestionFields,
+  validateAndNormalizeQuestionInput,
 } from "@/lib/question-fields";
 
 type SearchParamValue = string | string[] | undefined;
@@ -243,14 +244,18 @@ export async function getEditableQuestion(questionId: number): Promise<EditableQ
   };
 }
 
-async function findDuplicateQuestion(questionText: string, questionId?: number) {
-  return prisma.questionBankItem.findFirst({
+/** Uses the same `questionText` string produced by {@link validateAndNormalizeQuestionInput} (see DUPLICATE_QUESTION_TEXT_STRATEGY). */
+export async function findQuestionBankItemIdWithSameQuestionText(
+  questionText: string,
+  options?: { excludeQuestionId?: number },
+): Promise<number | null> {
+  const row = await prisma.questionBankItem.findFirst({
     where: {
       questionText,
-      ...(questionId
+      ...(options?.excludeQuestionId
         ? {
             NOT: {
-              id: questionId,
+              id: options.excludeQuestionId,
             },
           }
         : {}),
@@ -259,10 +264,12 @@ async function findDuplicateQuestion(questionText: string, questionId?: number) 
       id: true,
     },
   });
+
+  return row?.id ?? null;
 }
 
 export async function createQuestionBankItem(input: CreateQuestionInput): Promise<QuestionMutationResult> {
-  const validation = validateQuestionFields(input);
+  const validation = validateAndNormalizeQuestionInput(input);
 
   if (!validation.ok) {
     return {
@@ -271,12 +278,12 @@ export async function createQuestionBankItem(input: CreateQuestionInput): Promis
     };
   }
 
-  const duplicateQuestion = await findDuplicateQuestion(validation.data.questionText);
+  const duplicateId = await findQuestionBankItemIdWithSameQuestionText(validation.data.questionText);
 
-  if (duplicateQuestion) {
+  if (duplicateId !== null) {
     return {
       status: "error",
-      message: "Create failed. Another question already uses the same questionText.",
+      message: `Create failed. ${DUPLICATE_QUESTION_TEXT_BODY}`,
     };
   }
 
@@ -323,7 +330,7 @@ export async function updateQuestionBankItem(input: UpdateQuestionInput): Promis
     };
   }
 
-  const validation = validateQuestionFields(input);
+  const validation = validateAndNormalizeQuestionInput(input);
 
   if (!validation.ok) {
     return {
@@ -333,12 +340,14 @@ export async function updateQuestionBankItem(input: UpdateQuestionInput): Promis
     };
   }
 
-  const duplicateQuestion = await findDuplicateQuestion(validation.data.questionText, questionId);
+  const duplicateId = await findQuestionBankItemIdWithSameQuestionText(validation.data.questionText, {
+    excludeQuestionId: questionId,
+  });
 
-  if (duplicateQuestion) {
+  if (duplicateId !== null) {
     return {
       status: "error",
-      message: "Update failed. Another question already uses the same questionText.",
+      message: `Update failed. ${DUPLICATE_QUESTION_TEXT_BODY}`,
       questionId,
     };
   }

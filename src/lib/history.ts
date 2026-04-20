@@ -28,6 +28,14 @@ export type HistorySession = {
   answers: HistoryAnswer[];
 };
 
+export type HistorySessionsPage = {
+  rows: HistorySession[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 function getAccuracy(correctCount: number, totalQuestions: number) {
   if (totalQuestions === 0) {
     return 0;
@@ -36,14 +44,30 @@ function getAccuracy(correctCount: number, totalQuestions: number) {
   return Math.round((correctCount / totalQuestions) * 100);
 }
 
-export async function getCompletedStudySessions(): Promise<HistorySession[]> {
-  const sessions = await prisma.studySession.findMany({
+export async function getCompletedStudySessions(params?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<HistorySessionsPage> {
+  const pageSize = Math.max(1, params?.pageSize ?? 20);
+  const page = Math.max(1, params?.page ?? 1);
+  const skip = (page - 1) * pageSize;
+  const [total, sessions] = await Promise.all([
+    prisma.studySession.count({
+      where: {
+        endedAt: {
+          not: null,
+        },
+      },
+    }),
+    prisma.studySession.findMany({
     where: {
       endedAt: {
         not: null,
       },
     },
     orderBy: [{ endedAt: "desc" }, { id: "desc" }],
+    skip,
+    take: pageSize,
     select: {
       id: true,
       startedAt: true,
@@ -75,9 +99,10 @@ export async function getCompletedStudySessions(): Promise<HistorySession[]> {
         },
       },
     },
-  });
+    }),
+  ]);
 
-  return sessions.map((session) => {
+  const rows = sessions.map((session) => {
     const totalQuestions = session.totalQuestions > 0 ? session.totalQuestions : session.answerHistory.length;
 
     return {
@@ -100,4 +125,12 @@ export async function getCompletedStudySessions(): Promise<HistorySession[]> {
       })),
     };
   });
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  return {
+    rows,
+    total,
+    page: Math.min(page, totalPages),
+    pageSize,
+    totalPages,
+  };
 }

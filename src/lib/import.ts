@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { buildQuestionBankCreateData } from "@/lib/question-management";
+import { logOpsError, logOpsWarn } from "@/lib/ops-log";
 import {
   formatQuestionValidationMessage,
   type NormalizedQuestionFields,
@@ -145,8 +146,18 @@ export async function importQuestionBankJsonFile(file: File | null | undefined):
     return buildErrorResult("Only the fixed JSON question format is supported on this page.");
   }
 
-  const content = await file.text();
-  return importQuestionBankJson(content);
+  try {
+    const content = await file.text();
+    return importQuestionBankJson(content);
+  } catch (error) {
+    logOpsError({
+      area: "import",
+      event: "json_file_read_failed",
+      detail: { fileName: file.name, fileSize: file.size },
+      error,
+    });
+    return buildErrorResult("Failed to read the uploaded file.");
+  }
 }
 
 export async function importQuestionBankRecords(records: unknown[]): Promise<ImportResult> {
@@ -196,13 +207,13 @@ export async function importQuestionBankRecords(records: unknown[]): Promise<Imp
   }
 
   if (rowsToCreate.length > 0) {
-    await prisma.$transaction(async (transaction) => {
-      for (const row of rowsToCreate) {
-        await transaction.questionBankItem.create({
-          data: buildQuestionBankCreateData(row, { defaultSourceQuality: "import_json" }),
-        });
-      }
-    });
+    const BATCH = 500;
+    for (let i = 0; i < rowsToCreate.length; i += BATCH) {
+      const batch = rowsToCreate.slice(i, i + BATCH);
+      await prisma.questionBankItem.createMany({
+        data: batch.map((row) => buildQuestionBankCreateData(row, { defaultSourceQuality: "import_json" })),
+      });
+    }
   }
 
   const summary: ImportSummary = {
@@ -219,6 +230,17 @@ export async function importQuestionBankRecords(records: unknown[]): Promise<Imp
   }
 
   if (summary.invalidCount > 0) {
+    logOpsWarn({
+      area: "import",
+      event: "json_import_partial_invalid",
+      detail: {
+        totalRowsProcessed: summary.totalRowsProcessed,
+        importedCount: summary.importedCount,
+        skippedCount: summary.skippedCount,
+        invalidCount: summary.invalidCount,
+        firstIssue: invalidErrors[0] ?? null,
+      },
+    });
     return buildWarningResult(message, summary);
   }
 
@@ -234,7 +256,13 @@ export async function importQuestionBankJson(content: string): Promise<ImportRes
 
   try {
     parsed = JSON.parse(content);
-  } catch {
+  } catch (error) {
+    logOpsWarn({
+      area: "import",
+      event: "json_parse_failed",
+      detail: { contentLength: content.length },
+      error,
+    });
     return buildErrorResult("The uploaded file is not valid JSON.");
   }
 
@@ -246,5 +274,15 @@ export async function importQuestionBankJson(content: string): Promise<ImportRes
     return buildErrorResult("The JSON file does not contain any question rows.");
   }
 
-  return importQuestionBankRecords(parsed);
+  try {
+    return await importQuestionBankRecords(parsed);
+  } catch (error) {
+    logOpsError({
+      area: "import",
+      event: "json_import_failed",
+      detail: { rows: parsed.length },
+      error,
+    });
+    return buildErrorResult("Import failed due to a database or validation runtime error.");
+  }
 }

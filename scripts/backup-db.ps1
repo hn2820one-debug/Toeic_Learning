@@ -3,7 +3,28 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $projectRoot) { $projectRoot = (Get-Location).Path }
 
-$dbPath = Join-Path $projectRoot "dev.db"
+function Resolve-DatabasePath {
+    param([string]$RepoRoot)
+    $raw = $env:DATABASE_URL
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        return (Join-Path $RepoRoot "dev.db")
+    }
+
+    if ($raw.StartsWith("file:")) {
+        $candidate = $raw.Substring(5)
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            return (Join-Path $RepoRoot "dev.db")
+        }
+        if ([System.IO.Path]::IsPathRooted($candidate)) {
+            return $candidate
+        }
+        return (Join-Path $RepoRoot $candidate)
+    }
+
+    return (Join-Path $RepoRoot "dev.db")
+}
+
+$dbPath = Resolve-DatabasePath -RepoRoot $projectRoot
 $backupDir = Join-Path $projectRoot "backups"
 
 if (-not (Test-Path $dbPath)) {
@@ -36,3 +57,4 @@ if ($allBackups.Count -gt 14) {
 
 $remaining = (Get-ChildItem -Path $backupDir -Filter "dev.db.*.bak").Count
 Write-Host "Total backups: $remaining / 14 max" -ForegroundColor Cyan
+Write-Host "Database source: $dbPath" -ForegroundColor DarkCyan

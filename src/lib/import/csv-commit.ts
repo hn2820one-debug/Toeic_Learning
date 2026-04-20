@@ -10,6 +10,7 @@ import {
   validateAndNormalizeQuestionInput,
 } from "@/lib/question-fields";
 import { buildQuestionBankCreateData } from "@/lib/question-management";
+import { logOpsWarn } from "@/lib/ops-log";
 
 import { rowSchema, type CsvValidRow } from "./csv-preview";
 
@@ -57,7 +58,12 @@ export async function commitCsvImport(token: string): Promise<CsvCommitResult> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
-  } catch {
+  } catch (error) {
+    logOpsWarn({
+      area: "import",
+      event: "csv_commit_token_invalid",
+      error,
+    });
     return { ok: false, error: "Invalid or corrupted import token." };
   }
 

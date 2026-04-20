@@ -1,8 +1,14 @@
+import Link from "next/link";
+
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import AppCard from "@/components/ui/AppCard";
 import { getCompletedStudySessions } from "@/lib/history";
 
 export const dynamic = "force-dynamic";
+
+type HistoryPageProps = {
+  searchParams?: { page?: string };
+};
 
 function formatTimestamp(value: Date) {
   return value.toLocaleString("en-US", {
@@ -15,8 +21,11 @@ function formatTimestamp(value: Date) {
   });
 }
 
-export default async function HistoryPage() {
-  const sessions = await getCompletedStudySessions();
+export default async function HistoryPage({ searchParams }: HistoryPageProps) {
+  const rawPage = Number.parseInt(searchParams?.page ?? "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const sessionsPage = await getCompletedStudySessions({ page, pageSize: 20 });
+  const sessions = sessionsPage.rows;
 
   return (
     <div>
@@ -35,7 +44,7 @@ export default async function HistoryPage() {
       ) : (
         <div className="space-y-6">
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 shadow-sm">
-            共 {sessions.length} 場，新到舊 · {sessions.length} session(s), newest first
+            共 {sessionsPage.total} 場，新到舊 · page {sessionsPage.page}/{sessionsPage.totalPages}
           </div>
 
           {sessions.map((session) => (
@@ -149,6 +158,25 @@ export default async function HistoryPage() {
           ))}
         </div>
       )}
+      {sessionsPage.totalPages > 1 ? (
+        <div className="mt-6 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+          <Link
+            href={sessionsPage.page > 1 ? `/history?page=${sessionsPage.page - 1}` : "#"}
+            className={sessionsPage.page > 1 ? "font-semibold text-primary-700 underline" : "pointer-events-none text-slate-400"}
+          >
+            上一頁 · Prev
+          </Link>
+          <span className="text-slate-600">
+            {sessionsPage.page} / {sessionsPage.totalPages}
+          </span>
+          <Link
+            href={sessionsPage.page < sessionsPage.totalPages ? `/history?page=${sessionsPage.page + 1}` : "#"}
+            className={sessionsPage.page < sessionsPage.totalPages ? "font-semibold text-primary-700 underline" : "pointer-events-none text-slate-400"}
+          >
+            下一頁 · Next
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }

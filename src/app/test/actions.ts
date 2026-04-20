@@ -8,6 +8,7 @@ import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-orde
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { primaryModuleForTopic } from "@/lib/learning-path";
+import { logOpsWarn } from "@/lib/ops-log";
 import { prisma } from "@/lib/prisma";
 import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
 import {
@@ -160,17 +161,27 @@ export async function submitTestAnswer(
   choice: string,
   submitKey?: string,
 ): Promise<TestActionResult> {
+  const logSubmitFailure = (errorCode: string) =>
+    logOpsWarn({
+      area: "session",
+      event: "test_submit_rejected",
+      detail: { sessionId, position, errorCode },
+    });
+
   const user = await getOrCreateDevUser();
   if (!user) {
+    logSubmitFailure("no_user");
     return { ok: false, error: "no_user" };
   }
 
   const session = await loadOwnedTestSession(user.id, sessionId);
   if (!session || session.status !== "active") {
+    logSubmitFailure("invalid_session");
     return { ok: false, error: "invalid_session" };
   }
 
   if (position < 0 || position >= session.items.length) {
+    logSubmitFailure("invalid_position");
     return { ok: false, error: "invalid_position" };
   }
 
@@ -180,9 +191,11 @@ export async function submitTestAnswer(
   const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
   if (isDuplicateSubmitKey(st.lastSubmitKey, normalizedSubmitKey)) {
+    logSubmitFailure("already_answered");
     return { ok: false, error: "already_answered" };
   }
   if (isTestItemResolved(st)) {
+    logSubmitFailure("already_answered");
     return { ok: false, error: "already_answered" };
   }
 
@@ -208,6 +221,7 @@ export async function submitTestAnswer(
   } else {
     normalizedChoice = trimmed.toUpperCase();
     if (!["A", "B", "C", "D"].includes(normalizedChoice)) {
+      logSubmitFailure("invalid_choice");
       return { ok: false, error: "invalid_choice" };
     }
   }

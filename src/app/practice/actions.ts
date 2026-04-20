@@ -10,6 +10,7 @@ import { buildFallbackExplanationFromQuestion } from "@/lib/content-qa";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { primaryModuleForTopic } from "@/lib/learning-path";
 import { generateAdaptiveHint } from "@/lib/llm/adaptive-hint";
+import { logOpsWarn } from "@/lib/ops-log";
 import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
 import {
   computePracticeOutcome,
@@ -170,17 +171,27 @@ export async function submitPracticeAnswer(
   choice: string,
   submitKey?: string,
 ): Promise<PracticeActionResult & { revealAnswer?: string }> {
+  const logSubmitFailure = (errorCode: string) =>
+    logOpsWarn({
+      area: "session",
+      event: "practice_submit_rejected",
+      detail: { sessionId, position, errorCode },
+    });
+
   const user = await getOrCreateDevUser();
   if (!user) {
+    logSubmitFailure("no_user");
     return { ok: false, error: "no_user" };
   }
 
   const session = await loadOwnedSession(user.id, sessionId);
   if (!session || session.status !== "active") {
+    logSubmitFailure("invalid_session");
     return { ok: false, error: "invalid_session" };
   }
 
   if (position < 0 || position >= session.items.length) {
+    logSubmitFailure("invalid_position");
     return { ok: false, error: "invalid_position" };
   }
 
@@ -190,9 +201,11 @@ export async function submitPracticeAnswer(
   const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
   if (isDuplicateSubmitKey(state.lastSubmitKey, normalizedSubmitKey)) {
+    logSubmitFailure("already_submitted");
     return { ok: false, error: "already_submitted" };
   }
   if (state.status !== "open") {
+    logSubmitFailure("already_resolved");
     return { ok: false, error: "already_resolved" };
   }
 

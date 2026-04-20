@@ -3,6 +3,7 @@
  * feature modules (e.g. lesson-generator) only build prompts and interpret results.
  */
 import { logLlmUsage } from "./usage-log";
+import { logOpsError, logOpsWarn } from "@/lib/ops-log";
 import type {
   LlmGatewayChatMessage,
   LlmGatewayCompleteOptions,
@@ -651,12 +652,32 @@ export async function completeChat(
     }
     if (r.errorMessage) {
       errors.push(`${provider}: ${r.errorMessage}`);
+      logOpsWarn({
+        area: "llm",
+        event: "provider_call_failed",
+        detail: {
+          taskType: options.taskType,
+          provider,
+          promptVersion: options.promptVersion,
+          message: r.errorMessage,
+        },
+      });
     }
   }
 
   const latencyMs = Date.now() - startedAt;
   const lastProvider = order.length > 0 ? order[order.length - 1]! : ("google" as LlmProvider);
   const combined = errors.length > 0 ? errors.join(" | ") : "No LLM providers available or all calls failed.";
+  logOpsError({
+    area: "llm",
+    event: "gateway_exhausted",
+    detail: {
+      taskType: options.taskType,
+      promptVersion: options.promptVersion,
+      providerOrder: order,
+      errorSummary: combined,
+    },
+  });
 
   await logLlmUsage({
     taskType: options.taskType,

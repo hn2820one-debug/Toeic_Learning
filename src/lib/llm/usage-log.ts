@@ -1,6 +1,5 @@
-import "server-only";
-
 import { prisma } from "@/lib/prisma";
+import { logOpsError } from "@/lib/ops-log";
 
 import type { LogLlmUsageInput } from "./types";
 
@@ -31,6 +30,16 @@ export async function logLlmUsage(input: LogLlmUsageInput) {
       },
     });
   } catch (error) {
-    console.error("Failed to log LLM usage:", error);
+    logOpsError({
+      area: "llm",
+      event: "usage_log_write_failed",
+      detail: {
+        taskType: input.taskType,
+        provider: input.provider,
+        model: input.model,
+        promptVersion: input.promptVersion,
+      },
+      error,
+    });
   }
 }

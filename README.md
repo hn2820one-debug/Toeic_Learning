@@ -74,6 +74,7 @@ npm install
 Prisma CLI reads **`DATABASE_URL`** from **`.env.local`** first, then **`.env`** (`prisma.config.ts`). The runtime Prisma client defaults `DATABASE_URL` to `file:./dev.db` if unset (`src/lib/prisma.ts`), but **migrations** expect the variable to be set for consistency.
 
 Place secrets in **`.env.local`** (preferred for local dev) or **`.env`**. Never commit real keys.
+Use **`.env.example`** as the baseline template for a fresh setup.
 
 ### Run dev
 
@@ -124,6 +125,14 @@ npm run backup
 ```
 
 PowerShell script copies the SQLite file to a timestamped backup (see `scripts/backup-db.ps1`).
+
+### Database restore (filesystem)
+
+```bash
+npm run restore -- -BackupFile backups/dev.db.<timestamp>.bak
+```
+
+Restores a selected backup to the active SQLite path and creates a safety pre-restore copy.
 
 ### Seed / Phase 1 bank
 
@@ -200,6 +209,12 @@ Behavior is implemented in `src/lib/export/auth.ts` (localhost vs shared secret)
 3. **`npm run build`** before considering work done.
 4. Optional: **`npm run smoke:csv-import`** or quick manual browser checks (`/import`, `/training`, `/history`).
 5. **`git status`**, stage, commit with a clear message.
+
+Operational docs:
+
+- `docs/reliability-runbook.md`
+- `docs/backup-and-restore.md`
+- `docs/performance-watchpoints.md`
 
 ---
 

@@ -6,6 +6,7 @@ import type { Prisma } from "../../../generated/prisma";
 
 import { applyRating, previewIntervals, Rating, type RatingName as FsrsRatingName } from "@/lib/fsrs";
 import { getOrCreateDevUser } from "@/lib/dev-user";
+import { logOpsWarn } from "@/lib/ops-log";
 import { prisma } from "@/lib/prisma";
 import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
 import {
@@ -132,17 +133,27 @@ export async function submitReviewAnswer(
     correctAnswer?: string;
   }
 > {
+  const logSubmitFailure = (errorCode: string) =>
+    logOpsWarn({
+      area: "session",
+      event: "review_submit_rejected",
+      detail: { sessionId, position, errorCode },
+    });
+
   const user = await getOrCreateDevUser();
   if (!user) {
+    logSubmitFailure("no_user");
     return { ok: false, error: "no_user" };
   }
 
   const session = await loadOwnedReviewSession(user.id, sessionId);
   if (!session || session.status !== "active") {
+    logSubmitFailure("invalid_session");
     return { ok: false, error: "invalid_session" };
   }
 
   if (position < 0 || position >= session.items.length) {
+    logSubmitFailure("invalid_position");
     return { ok: false, error: "invalid_position" };
   }
 
@@ -152,9 +163,11 @@ export async function submitReviewAnswer(
   const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
   if (isDuplicateSubmitKey(st.lastSubmitKey, normalizedSubmitKey)) {
+    logSubmitFailure("already_answered");
     return { ok: false, error: "already_answered" };
   }
   if (st.phase === "answered" || st.phase === "rated") {
+    logSubmitFailure("already_answered");
     return { ok: false, error: "already_answered" };
   }
 
@@ -180,6 +193,7 @@ export async function submitReviewAnswer(
   } else {
     normalizedChoice = trimmed.toUpperCase();
     if (!["A", "B", "C", "D"].includes(normalizedChoice)) {
+      logSubmitFailure("invalid_choice");
       return { ok: false, error: "invalid_choice" };
     }
   }
@@ -240,17 +254,27 @@ export async function submitReviewRating(
   rating: ReviewRatingName,
   submitKey?: string,
 ): Promise<ReviewActionResult & { sessionCompleted?: boolean }> {
+  const logRatingFailure = (errorCode: string) =>
+    logOpsWarn({
+      area: "session",
+      event: "review_rating_rejected",
+      detail: { sessionId, position, errorCode },
+    });
+
   const user = await getOrCreateDevUser();
   if (!user) {
+    logRatingFailure("no_user");
     return { ok: false, error: "no_user" };
   }
 
   const session = await loadOwnedReviewSession(user.id, sessionId);
   if (!session || session.status !== "active") {
+    logRatingFailure("invalid_session");
     return { ok: false, error: "invalid_session" };
   }
 
   if (position < 0 || position >= session.items.length) {
+    logRatingFailure("invalid_position");
     return { ok: false, error: "invalid_position" };
   }
 
@@ -260,16 +284,20 @@ export async function submitReviewRating(
   const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
   if (st.phase !== "answered") {
+    logRatingFailure("not_answered");
     return { ok: false, error: "not_answered" };
   }
   if (isDuplicateSubmitKey(st.lastRatingKey, normalizedSubmitKey)) {
+    logRatingFailure("already_rated");
     return { ok: false, error: "already_rated" };
   }
   if (st.rating != null) {
+    logRatingFailure("already_rated");
     return { ok: false, error: "already_rated" };
   }
 
   if (!RATING_MAP[rating]) {
+    logRatingFailure("invalid_rating");
     return { ok: false, error: "invalid_rating" };
   }
 

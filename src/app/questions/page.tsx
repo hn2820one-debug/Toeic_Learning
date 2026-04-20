@@ -4,8 +4,10 @@ import { parseQuestionNotes } from "@/lib/question-taxonomy";
 import { formInputClass, primaryButtonClass, secondaryButtonClass } from "@/lib/ui/form-classes";
 import {
   getQuestionFilterOptions,
-  getQuestions,
+  getQuestionsPage,
   normalizeQuestionFilters,
+  parseQuestionPage,
+  QUESTION_PAGE_SIZE,
   type QuestionPageSearchParams,
 } from "@/lib/questions";
 
@@ -46,12 +48,14 @@ function getResultVariantClasses(status?: string) {
 
 export default async function QuestionsPage({ searchParams }: QuestionsPageProps) {
   const filters = normalizeQuestionFilters(searchParams);
+  const page = parseQuestionPage(searchParams?.page);
   const status = normalizeParam(searchParams?.status);
   const message = normalizeParam(searchParams?.message);
-  const [{ topics, difficulties }, questions] = await Promise.all([
+  const [{ topics, difficulties }, questionsPage] = await Promise.all([
     getQuestionFilterOptions(),
-    getQuestions(filters),
+    getQuestionsPage(filters, page),
   ]);
+  const questions = questionsPage.rows;
 
   const hasActiveFilters = Boolean(filters.topic || filters.difficulty || filters.query);
 
@@ -141,7 +145,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
             重設 · Reset
           </a>
           <p className="text-sm text-slate-600">
-            {questions.length} 題 · {questions.length === 1 ? "question" : "questions"} found
+            {questionsPage.total} 題 · page {questionsPage.page}/{questionsPage.totalPages} · {QUESTION_PAGE_SIZE} / page
           </p>
         </div>
       </form>
@@ -239,6 +243,43 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
           })}
         </div>
       )}
+      {questionsPage.totalPages > 1 ? (
+        <div className="mt-6 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+          <a
+            href={
+              questionsPage.page > 1
+                ? `/questions?${new URLSearchParams({
+                    ...(filters.topic ? { topic: filters.topic } : {}),
+                    ...(filters.difficulty ? { difficulty: filters.difficulty } : {}),
+                    ...(filters.query ? { q: filters.query } : {}),
+                    page: String(questionsPage.page - 1),
+                  }).toString()}`
+                : "#"
+            }
+            className={`font-semibold ${questionsPage.page > 1 ? "text-primary-700 underline" : "pointer-events-none text-slate-400"}`}
+          >
+            上一頁 · Prev
+          </a>
+          <span className="text-slate-600">
+            {questionsPage.page} / {questionsPage.totalPages}
+          </span>
+          <a
+            href={
+              questionsPage.page < questionsPage.totalPages
+                ? `/questions?${new URLSearchParams({
+                    ...(filters.topic ? { topic: filters.topic } : {}),
+                    ...(filters.difficulty ? { difficulty: filters.difficulty } : {}),
+                    ...(filters.query ? { q: filters.query } : {}),
+                    page: String(questionsPage.page + 1),
+                  }).toString()}`
+                : "#"
+            }
+            className={`font-semibold ${questionsPage.page < questionsPage.totalPages ? "text-primary-700 underline" : "pointer-events-none text-slate-400"}`}
+          >
+            下一頁 · Next
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }

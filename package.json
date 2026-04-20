@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-db.ps1",
+    "restore": "powershell -ExecutionPolicy Bypass -File scripts/restore-db.ps1",
     "backfill:answer-history-snapshots": "tsx scripts/backfill-answer-history-snapshots.ts",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",

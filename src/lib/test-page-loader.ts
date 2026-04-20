@@ -6,6 +6,8 @@ import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { getTestResultSummary, parseTestItemState, type TestResultSummary } from "@/lib/test-mode";
 import { prisma } from "@/lib/prisma";
+import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
+import { getCompletionNextStep, type CompletionNextStep } from "@/lib/session-summary";
 
 function isPhase1TopicKey(id: string): id is Phase1TopicKey {
   return (PHASE1_TOPIC_KEYS_IN_ORDER as readonly string[]).includes(id);
@@ -32,7 +34,12 @@ export type TestPageView =
       reason: "stage_not_practiced" | "no_progress_row";
       stage: string | null;
     }
-  | { kind: "ready"; topicKey: Phase1TopicKey; label: string }
+  | {
+      kind: "ready";
+      topicKey: Phase1TopicKey;
+      label: string;
+      resumeCandidate?: { sessionId: string; stale: boolean };
+    }
   | {
       kind: "session";
       topicKey: Phase1TopicKey;
@@ -45,6 +52,7 @@ export type TestPageView =
       /** Present when status === completed */
       resultSummary?: TestResultSummary;
       compositionWarnings?: string[];
+      nextStep?: CompletionNextStep;
     };
 
 export async function getTestPageView(params: {
@@ -69,6 +77,28 @@ export async function getTestPageView(params: {
   const progress = await prisma.userTopicProgress.findUnique({
     where: { userId_topicKey: { userId: user.id, topicKey } },
   });
+
+  if (!params.sessionId) {
+    const candidate = await findActiveSessionResumeCandidate({
+      userId: user.id,
+      mode: "test",
+      topicKey,
+    });
+    if (candidate && !candidate.stale) {
+      params = { ...params, sessionId: candidate.sessionId };
+    } else if (candidate) {
+      if (!progress || progress.stage !== "Practiced") {
+        return {
+          kind: "not_ready",
+          topicKey,
+          label,
+          reason: !progress ? "no_progress_row" : "stage_not_practiced",
+          stage: progress?.stage ?? null,
+        };
+      }
+      return { kind: "ready", topicKey, label, resumeCandidate: { sessionId: candidate.sessionId, stale: true } };
+    }
+  }
 
   if (params.sessionId) {
     const session = await prisma.learningSession.findFirst({
@@ -102,6 +132,12 @@ export async function getTestPageView(params: {
             optionD: q.optionD,
           };
         });
+        const nextStep = await getCompletionNextStep({
+          defaultHref: `/learn/${encodeURIComponent(tk)}`,
+          defaultTitleZh: "回到今日學習",
+          defaultDetailZh: "驗收後建議先處理 learning path 排序最高的任務。",
+        });
+
         return {
           kind: "session",
           topicKey: tk,
@@ -161,6 +197,11 @@ export async function getTestPageView(params: {
             optionD: q.optionD,
           };
         });
+        const nextStep = await getCompletionNextStep({
+          defaultHref: `/learn/${encodeURIComponent(tk)}`,
+          defaultTitleZh: "回到今日學習",
+          defaultDetailZh: "驗收後建議先處理 learning path 排序最高的任務。",
+        });
 
         return {
           kind: "session",
@@ -173,6 +214,7 @@ export async function getTestPageView(params: {
           itemStatesJson: session.items.map((it) => it.testStateJson ?? null),
           resultSummary: summary,
           compositionWarnings,
+          nextStep,
         };
       }
 

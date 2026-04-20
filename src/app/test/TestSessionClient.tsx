@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import QuestionTimer from "@/components/training/QuestionTimer";
+import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
+import type { CompletionNextStep } from "@/lib/session-summary";
 import type { TestQuestionPayloadActive } from "@/lib/test-page-loader";
 import { parseTestItemState, TEST_SECONDS_PER_QUESTION, TEST_TIMEOUT_USER_CHOICE, type TestResultSummary } from "@/lib/test-mode";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
@@ -22,6 +23,7 @@ type TestSessionClientProps = {
   itemStatesJson: unknown[];
   resultSummary?: TestResultSummary;
   compositionWarnings?: string[];
+  nextStep?: CompletionNextStep;
 };
 
 export function TestStartClient({ topicKey }: { topicKey: string }) {
@@ -67,6 +69,7 @@ export default function TestSessionClient({
   itemStatesJson,
   resultSummary,
   compositionWarnings,
+  nextStep,
 }: TestSessionClientProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -110,8 +113,9 @@ export default function TestSessionClient({
     }
     processingRef.current = true;
     setTimerActive(false);
+    const submitKey = `${sessionId}-${safePos}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startTransition(() => {
-      void submitTestAnswer(sessionId, safePos, choice).then((r) => {
+      void submitTestAnswer(sessionId, safePos, choice, submitKey).then((r) => {
         if (!r.ok) {
           processingRef.current = false;
           return;
@@ -127,8 +131,9 @@ export default function TestSessionClient({
     }
     processingRef.current = true;
     setTimerActive(false);
+    const submitKey = `${sessionId}-${safePos}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startTransition(() => {
-      void submitTestAnswer(sessionId, safePos, TEST_TIMEOUT_USER_CHOICE).then((r) => {
+      void submitTestAnswer(sessionId, safePos, TEST_TIMEOUT_USER_CHOICE, submitKey).then((r) => {
         if (!r.ok) {
           processingRef.current = false;
           return;
@@ -153,6 +158,7 @@ export default function TestSessionClient({
             </li>
             <li>超時題數 · Timeouts: {s.timeoutCount}</li>
             <li className="font-semibold">{s.passed ? "通過 · Passed" : "未通過 · Not passed"}</li>
+            {nextStep ? <li className="rounded-lg bg-white/70 px-2 py-1">下一步：{nextStep.detailZh}</li> : null}
           </ul>
           {compositionWarnings && compositionWarnings.length > 0 ? (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
@@ -167,8 +173,8 @@ export default function TestSessionClient({
           <div className="mt-4 flex flex-wrap gap-3">
             {s.passed ? (
               <>
-                <Link href={`/review?topicKey=${encodeURIComponent(topicKey)}`} className={primaryButtonClass}>
-                  前往複習隊列 · Go to review
+                <Link href={nextStep?.href ?? `/review?topicKey=${encodeURIComponent(topicKey)}`} className={primaryButtonClass}>
+                  {nextStep?.ctaLabelZh ?? "前往複習隊列"} · Next step
                 </Link>
                 <Link
                   href={`/learn/${encodeURIComponent(topicKey)}`}
@@ -257,24 +263,21 @@ export default function TestSessionClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
-        <div>
-          <p className="font-semibold">{label}</p>
-          <p className="mt-1">
-            驗收 · 第 {safePos + 1} / {n} 題 · 無提示 · 單次作答
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-amber-900/90">剩餘 · Time</span>
-          <QuestionTimer
-            resetKey={`${sessionId}-${safePos}`}
-            totalSec={TEST_SECONDS_PER_QUESTION}
-            active={timerActive && !pending}
-            onExpire={handleExpire}
-            className="rounded-xl border border-amber-300/80 bg-white px-3 py-1.5 text-base text-amber-950 shadow-sm"
-          />
-        </div>
-      </div>
+      <SessionHeader
+        mode="test"
+        current={safePos + 1}
+        total={n}
+        titleZh={label}
+        subtitleZh="無提示 · 單次作答"
+        topicOrModuleLabel="限時驗收"
+        timer={{
+          active: timerActive && !pending,
+          totalSec: TEST_SECONDS_PER_QUESTION,
+          resetKey: `${sessionId}-${safePos}`,
+          onExpire: handleExpire,
+          tone: "amber",
+        }}
+      />
 
       <AppCard padding="md">
         <p className="mb-4 whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>

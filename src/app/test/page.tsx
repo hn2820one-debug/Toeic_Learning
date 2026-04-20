@@ -114,6 +114,19 @@ export default async function TestPage({ searchParams }: TestPageProps) {
           <p className="mt-1">{PHASE1_TOPIC_LABELS[view.topicKey]}</p>
         </div>
         <AppCard padding="md">
+          {view.resumeCandidate ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              <p className="font-semibold">偵測到未完成驗收</p>
+              <div className="mt-1">
+                <Link
+                  href={`/test?topicKey=${encodeURIComponent(view.topicKey)}&session=${encodeURIComponent(view.resumeCandidate.sessionId)}&pos=0`}
+                  className="font-semibold underline"
+                >
+                  先接續舊場次
+                </Link>
+              </div>
+            </div>
+          ) : null}
           <TestStartClient topicKey={view.topicKey} />
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
@@ -175,6 +188,7 @@ export default async function TestPage({ searchParams }: TestPageProps) {
           itemStatesJson={view.itemStatesJson}
           resultSummary={view.resultSummary}
           compositionWarnings={view.compositionWarnings}
+          nextStep={view.nextStep}
         />
       </div>
     );

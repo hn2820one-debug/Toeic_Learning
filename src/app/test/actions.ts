@@ -9,6 +9,7 @@ import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { primaryModuleForTopic } from "@/lib/learning-path";
 import { prisma } from "@/lib/prisma";
+import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
 import {
   buildTestQuestionSet,
   collectTestCompositionWarnings,
@@ -157,6 +158,7 @@ export async function submitTestAnswer(
   sessionId: string,
   position: number,
   choice: string,
+  submitKey?: string,
 ): Promise<TestActionResult> {
   const user = await getOrCreateDevUser();
   if (!user) {
@@ -175,7 +177,11 @@ export async function submitTestAnswer(
   const item = session.items[position]!;
   const q = item.question;
   const st = parseTestItemState(item.testStateJson);
+  const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
+  if (isDuplicateSubmitKey(st.lastSubmitKey, normalizedSubmitKey)) {
+    return { ok: false, error: "already_answered" };
+  }
   if (isTestItemResolved(st)) {
     return { ok: false, error: "already_answered" };
   }
@@ -217,6 +223,7 @@ export async function submitTestAnswer(
     answeredAt,
     timeTakenSec,
     timedOut: isTimeout,
+    lastSubmitKey: normalizedSubmitKey,
   };
 
   await prisma.learningSessionItem.update({

@@ -26,7 +26,9 @@ export type ReviewItemStateJson = {
   answeredAt?: string;
   timeTakenSec?: number;
   timedOut?: boolean;
+  lastSubmitKey?: string;
   rating?: ReviewRatingName;
+  lastRatingKey?: string;
   ratedAt?: string;
   /** After successful FSRS write — ISO */
   nextDueAt?: string;
@@ -57,7 +59,9 @@ export function parseReviewItemState(raw: unknown): ReviewItemStateJson {
     answeredAt: typeof o.answeredAt === "string" ? o.answeredAt : undefined,
     timeTakenSec: typeof o.timeTakenSec === "number" && Number.isFinite(o.timeTakenSec) ? o.timeTakenSec : undefined,
     timedOut: typeof o.timedOut === "boolean" ? o.timedOut : undefined,
+    lastSubmitKey: typeof o.lastSubmitKey === "string" ? o.lastSubmitKey : undefined,
     rating,
+    lastRatingKey: typeof o.lastRatingKey === "string" ? o.lastRatingKey : undefined,
     ratedAt: typeof o.ratedAt === "string" ? o.ratedAt : undefined,
     nextDueAt: typeof o.nextDueAt === "string" ? o.nextDueAt : undefined,
   };

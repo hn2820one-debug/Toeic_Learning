@@ -7,6 +7,7 @@ import type { Prisma } from "../../../generated/prisma";
 import { applyRating, previewIntervals, Rating, type RatingName as FsrsRatingName } from "@/lib/fsrs";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { prisma } from "@/lib/prisma";
+import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
 import {
   emptyReviewItemState,
   explanationFallbackCopy,
@@ -122,6 +123,7 @@ export async function submitReviewAnswer(
   sessionId: string,
   position: number,
   choice: string,
+  submitKey?: string,
 ): Promise<
   ReviewActionResult & {
     intervalPreviews?: Record<FsrsRatingName, { dueAt: Date; label: string }>;
@@ -147,7 +149,11 @@ export async function submitReviewAnswer(
   const item = session.items[position]!;
   const q = item.question;
   const st = parseReviewItemState(item.reviewStateJson);
+  const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
+  if (isDuplicateSubmitKey(st.lastSubmitKey, normalizedSubmitKey)) {
+    return { ok: false, error: "already_answered" };
+  }
   if (st.phase === "answered" || st.phase === "rated") {
     return { ok: false, error: "already_answered" };
   }
@@ -189,6 +195,7 @@ export async function submitReviewAnswer(
     answeredAt,
     timeTakenSec,
     timedOut: isTimeout,
+    lastSubmitKey: normalizedSubmitKey,
   };
 
   await prisma.learningSessionItem.update({
@@ -231,6 +238,7 @@ export async function submitReviewRating(
   sessionId: string,
   position: number,
   rating: ReviewRatingName,
+  submitKey?: string,
 ): Promise<ReviewActionResult & { sessionCompleted?: boolean }> {
   const user = await getOrCreateDevUser();
   if (!user) {
@@ -249,9 +257,13 @@ export async function submitReviewRating(
   const item = session.items[position]!;
   const q = item.question;
   const st = parseReviewItemState(item.reviewStateJson);
+  const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
   if (st.phase !== "answered") {
     return { ok: false, error: "not_answered" };
+  }
+  if (isDuplicateSubmitKey(st.lastRatingKey, normalizedSubmitKey)) {
+    return { ok: false, error: "already_rated" };
   }
   if (st.rating != null) {
     return { ok: false, error: "already_rated" };
@@ -270,6 +282,7 @@ export async function submitReviewRating(
       ...st,
       phase: "rated",
       rating,
+      lastRatingKey: normalizedSubmitKey,
       ratedAt,
       nextDueAt,
     };

@@ -13,6 +13,8 @@ import {
 } from "@/lib/review-mode";
 import { buildReviewSession } from "@/lib/review-session-builder";
 import { prisma } from "@/lib/prisma";
+import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
+import { getCompletionNextStep, type CompletionNextStep } from "@/lib/session-summary";
 
 export type ReviewQuestionPayload = {
   id: number;
@@ -41,6 +43,7 @@ export type ReviewPageView =
       kind: "ready";
       queueStats: { dueCount: number; newCount: number; learningCount: number };
       sourceMeta: { dueInQueue: number; newInQueue: number; totalFromHelper: number; sessionQuestionCount: number };
+      resumeCandidate?: { sessionId: string; stale: boolean };
     }
   | {
       kind: "session";
@@ -53,6 +56,7 @@ export type ReviewPageView =
       ratingPreviews?: RatingPreviewMap | null;
       summary?: ReviewQueueSummary;
       queueStatsAfter?: { dueCount: number; newCount: number; learningCount: number };
+      nextStep?: CompletionNextStep;
     };
 
 function firstIncompletePosition(
@@ -96,6 +100,25 @@ export async function getReviewPageView(params: { sessionId: string | undefined;
   const queueStats = await getQueueStats();
 
   if (!params.sessionId) {
+    const candidate = await findActiveSessionResumeCandidate({
+      userId: user.id,
+      mode: "review",
+    });
+    if (candidate && !candidate.stale) {
+      params = { ...params, sessionId: candidate.sessionId };
+    } else if (candidate) {
+      const built = await buildReviewSession();
+      if (built.questionIds.length === 0) {
+        return { kind: "empty", queueStats };
+      }
+      return {
+        kind: "ready",
+        queueStats,
+        sourceMeta: built.sourceMeta,
+        resumeCandidate: { sessionId: candidate.sessionId, stale: true },
+      };
+    }
+
     const built = await buildReviewSession();
     if (built.questionIds.length === 0) {
       return { kind: "empty", queueStats };
@@ -170,6 +193,11 @@ export async function getReviewPageView(params: { sessionId: string | undefined;
       })),
     });
     const queueStatsAfter = await getQueueStats();
+    const nextStep = await getCompletionNextStep({
+      defaultHref: "/learn",
+      defaultTitleZh: "回到今日學習",
+      defaultDetailZh: "複習完成後，建議繼續完成 learning path 目前最高優先任務。",
+    });
     return {
       kind: "session",
       sessionId: session.id,
@@ -179,6 +207,7 @@ export async function getReviewPageView(params: { sessionId: string | undefined;
       itemStatesJson: session.items.map((it) => it.reviewStateJson ?? null),
       summary,
       queueStatsAfter,
+      nextStep,
     };
   }
 

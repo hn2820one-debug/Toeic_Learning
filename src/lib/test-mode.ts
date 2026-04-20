@@ -33,6 +33,7 @@ export type TestItemStateJson = {
   answeredAt?: string;
   timeTakenSec?: number;
   timedOut?: boolean;
+  lastSubmitKey?: string;
 };
 
 export function emptyTestItemState(): TestItemStateJson {
@@ -55,6 +56,7 @@ export function parseTestItemState(raw: unknown): TestItemStateJson {
     answeredAt: typeof o.answeredAt === "string" ? o.answeredAt : undefined,
     timeTakenSec: typeof o.timeTakenSec === "number" && Number.isFinite(o.timeTakenSec) ? o.timeTakenSec : undefined,
     timedOut: typeof o.timedOut === "boolean" ? o.timedOut : undefined,
+    lastSubmitKey: typeof o.lastSubmitKey === "string" ? o.lastSubmitKey : undefined,
   };
 }
 

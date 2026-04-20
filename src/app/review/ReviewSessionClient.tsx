@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import QuestionTimer from "@/components/training/QuestionTimer";
+import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
+import type { CompletionNextStep } from "@/lib/session-summary";
 import type { RatingPreviewMap, ReviewQuestionPayload } from "@/lib/review-page-loader";
 import {
   explanationFallbackCopy,
@@ -40,6 +41,7 @@ type ReviewSessionClientProps = {
   ratingPreviews?: RatingPreviewMap | null;
   summary?: ReviewQueueSummary;
   queueStatsAfter?: { dueCount: number; newCount: number; learningCount: number };
+  nextStep?: CompletionNextStep;
 };
 
 export function ReviewStartClient() {
@@ -82,6 +84,7 @@ export default function ReviewSessionClient({
   ratingPreviews,
   summary,
   queueStatsAfter,
+  nextStep,
 }: ReviewSessionClientProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -111,8 +114,9 @@ export default function ReviewSessionClient({
     }
     processingRef.current = true;
     setTimerActive(false);
+    const submitKey = `${sessionId}-${safePos}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startTransition(() => {
-      void submitReviewAnswer(sessionId, safePos, choice).then((r) => {
+      void submitReviewAnswer(sessionId, safePos, choice, submitKey).then((r) => {
         processingRef.current = false;
         if (!r.ok) {
           return;
@@ -128,8 +132,9 @@ export default function ReviewSessionClient({
     }
     processingRef.current = true;
     setTimerActive(false);
+    const submitKey = `${sessionId}-${safePos}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startTransition(() => {
-      void submitReviewAnswer(sessionId, safePos, REVIEW_TIMEOUT_USER_CHOICE).then((r) => {
+      void submitReviewAnswer(sessionId, safePos, REVIEW_TIMEOUT_USER_CHOICE, submitKey).then((r) => {
         processingRef.current = false;
         if (!r.ok) {
           return;
@@ -145,8 +150,9 @@ export default function ReviewSessionClient({
     }
     processingRef.current = true;
     setFsrsError(null);
+    const submitKey = `${sessionId}-${safePos}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     startTransition(() => {
-      void submitReviewRating(sessionId, safePos, rating).then((r) => {
+      void submitReviewRating(sessionId, safePos, rating, submitKey).then((r) => {
         processingRef.current = false;
         if (!r.ok) {
           if (r.error === "fsrs_apply_failed" || r.error === "persist_failed") {
@@ -204,11 +210,11 @@ export default function ReviewSessionClient({
         ) : null}
 
         <AppCard padding="md">
-          <p className="text-sm text-slate-700">{next.hintZh}</p>
+          <p className="text-sm text-slate-700">{nextStep?.detailZh ?? next.hintZh}</p>
           <p className="text-xs text-slate-500">{next.hintEn}</p>
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link href={next.href} className={primaryButtonClass}>
-              {next.titleZh} · {next.titleEn}
+            <Link href={nextStep?.href ?? next.href} className={primaryButtonClass}>
+              {nextStep?.ctaLabelZh ?? `${next.titleZh} · ${next.titleEn}`}
             </Link>
             <Link
               href="/learn"
@@ -256,10 +262,14 @@ export default function ReviewSessionClient({
     const previews = ratingPreviews;
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-violet-200/80 bg-violet-50/90 px-4 py-3 text-sm text-violet-950">
-          <p className="font-semibold">複習 · FSRS · 第 {safePos + 1} / {n} 題</p>
-          <p className="mt-1">請依記憶難度選擇評分（會寫回 FSRS）。</p>
-        </div>
+        <SessionHeader
+          mode="review"
+          current={safePos + 1}
+          total={n}
+          titleZh="FSRS 複習"
+          subtitleZh="請依記憶難度選擇評分（會寫回 FSRS）"
+          topicOrModuleLabel="已作答，等待評分"
+        />
 
         {fsrsError ? (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
@@ -336,24 +346,21 @@ export default function ReviewSessionClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-200/80 bg-violet-50/90 px-4 py-3 text-sm text-violet-950">
-        <div>
-          <p className="font-semibold">FSRS 複習</p>
-          <p className="mt-1">
-            第 {safePos + 1} / {n} 題 · 混合主題
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium">剩餘</span>
-          <QuestionTimer
-            resetKey={`${sessionId}-${safePos}`}
-            totalSec={REVIEW_SECONDS_PER_QUESTION}
-            active={timerActive && !pending}
-            onExpire={handleExpire}
-            className="rounded-xl border border-violet-300/80 bg-white px-3 py-1.5 text-base shadow-sm"
-          />
-        </div>
-      </div>
+      <SessionHeader
+        mode="review"
+        current={safePos + 1}
+        total={n}
+        titleZh="FSRS 複習"
+        subtitleZh="混合主題"
+        topicOrModuleLabel={q.topic}
+        timer={{
+          active: timerActive && !pending,
+          totalSec: REVIEW_SECONDS_PER_QUESTION,
+          resetKey: `${sessionId}-${safePos}`,
+          onExpire: handleExpire,
+          tone: "violet",
+        }}
+      />
 
       <AppCard padding="md">
         <div className="mb-3 flex flex-wrap gap-2">

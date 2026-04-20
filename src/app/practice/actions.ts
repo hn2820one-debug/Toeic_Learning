@@ -10,6 +10,7 @@ import { buildFallbackExplanationFromQuestion } from "@/lib/content-qa";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { primaryModuleForTopic } from "@/lib/learning-path";
 import { generateAdaptiveHint } from "@/lib/llm/adaptive-hint";
+import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
 import {
   computePracticeOutcome,
   outcomesFromItemStates,
@@ -167,6 +168,7 @@ export async function submitPracticeAnswer(
   sessionId: string,
   position: number,
   choice: string,
+  submitKey?: string,
 ): Promise<PracticeActionResult & { revealAnswer?: string }> {
   const user = await getOrCreateDevUser();
   if (!user) {
@@ -185,7 +187,11 @@ export async function submitPracticeAnswer(
   const item = session.items[position]!;
   const q = item.question;
   const state = parsePracticeItemState(item.practiceStateJson);
+  const normalizedSubmitKey = normalizeSubmitKey(submitKey);
 
+  if (isDuplicateSubmitKey(state.lastSubmitKey, normalizedSubmitKey)) {
+    return { ok: false, error: "already_submitted" };
+  }
   if (state.status !== "open") {
     return { ok: false, error: "already_resolved" };
   }
@@ -205,6 +211,7 @@ export async function submitPracticeAnswer(
       ...state,
       attempts,
       status: "solved",
+      lastSubmitKey: normalizedSubmitKey,
     };
     await prisma.learningSessionItem.update({
       where: { id: item.id },
@@ -236,6 +243,7 @@ export async function submitPracticeAnswer(
       ...state,
       attempts,
       status: "revealed",
+      lastSubmitKey: normalizedSubmitKey,
     };
     await prisma.learningSessionItem.update({
       where: { id: item.id },
@@ -248,6 +256,7 @@ export async function submitPracticeAnswer(
   const next: PracticeItemState = {
     ...state,
     attempts,
+    lastSubmitKey: normalizedSubmitKey,
   };
   await prisma.learningSessionItem.update({
     where: { id: item.id },

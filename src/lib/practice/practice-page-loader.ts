@@ -11,6 +11,8 @@ import {
 } from "@/lib/practice/practice-result-rules";
 import { parsePracticeItemState } from "@/lib/practice/practice-state";
 import { prisma } from "@/lib/prisma";
+import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
+import { getCompletionNextStep, type CompletionNextStep } from "@/lib/session-summary";
 
 function isPhase1TopicKey(id: string): id is Phase1TopicKey {
   return (PHASE1_TOPIC_KEYS_IN_ORDER as readonly string[]).includes(id);
@@ -40,7 +42,13 @@ export type PracticeCompletedSummary = {
 export type PracticePageView =
   | { kind: "no_topic" }
   | { kind: "no_user"; topicKey: Phase1TopicKey; label: string }
-  | { kind: "ready"; topicKey: Phase1TopicKey; label: string; userId: number }
+  | {
+      kind: "ready";
+      topicKey: Phase1TopicKey;
+      label: string;
+      userId: number;
+      resumeCandidate?: { sessionId: string; stale: boolean };
+    }
   | {
       kind: "session";
       topicKey: Phase1TopicKey;
@@ -51,6 +59,7 @@ export type PracticePageView =
       currentPosition: number;
       itemStatesJson: unknown[];
       completedSummary?: PracticeCompletedSummary;
+      nextStep?: CompletionNextStep;
     };
 
 export async function getPracticePageView(params: {
@@ -71,7 +80,22 @@ export async function getPracticePageView(params: {
   }
 
   if (!params.sessionId) {
-    return { kind: "ready", topicKey, label, userId: user.id };
+    const candidate = await findActiveSessionResumeCandidate({
+      userId: user.id,
+      mode: "practice",
+      topicKey,
+    });
+    if (candidate && !candidate.stale) {
+      params = { ...params, sessionId: candidate.sessionId, pos: params.pos };
+    } else {
+      return {
+        kind: "ready",
+        topicKey,
+        label,
+        userId: user.id,
+        resumeCandidate: candidate ? { sessionId: candidate.sessionId, stale: candidate.stale } : undefined,
+      };
+    }
   }
 
   const session = await prisma.learningSession.findFirst({
@@ -131,9 +155,15 @@ export async function getPracticePageView(params: {
   const currentPosition = n === 0 ? 0 : Math.min(Math.max(0, params.pos), n - 1);
 
   let completedSummary: PracticeCompletedSummary | undefined;
+  let nextStep: CompletionNextStep | undefined;
   if (session.status === "completed" && session.items.length > 0) {
     const states = session.items.map((it) => parsePracticeItemState(it.practiceStateJson));
     completedSummary = computePracticeOutcome({ questions: outcomesFromItemStates(states) });
+    nextStep = await getCompletionNextStep({
+      defaultHref: `/learn/${encodeURIComponent(tk)}`,
+      defaultTitleZh: "回主題學習",
+      defaultDetailZh: "先整理本次練習重點，再決定是否直接進入驗收。",
+    });
   }
 
   const itemStatesJson = session.items.map((it) => it.practiceStateJson);
@@ -148,5 +178,6 @@ export async function getPracticePageView(params: {
     currentPosition,
     itemStatesJson,
     completedSummary,
+    nextStep,
   };
 }

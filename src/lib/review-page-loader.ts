@@ -163,6 +163,43 @@ export async function getReviewPageView(params: { sessionId: string | undefined;
   const requested = Number.isFinite(params.pos) ? Math.max(0, Math.floor(params.pos)) : 0;
   const firstInc = firstIncompletePosition(session.items);
 
+  /** All items rated but session row still `active` (e.g. last-step completion failed) — heal so UI/summary work. */
+  if (session.status === "active" && firstInc === null && session.items.length > 0) {
+    const allRated = session.items.every((it) =>
+      isReviewItemRated(parseReviewItemState(it.reviewStateJson)),
+    );
+    if (allRated) {
+      await prisma.learningSession.update({
+        where: { id: session.id },
+        data: { status: "completed", endedAt: new Date() },
+      });
+      const summary = buildReviewQueueSummary({
+        items: session.items.map((it) => ({
+          questionId: it.questionBankItemId,
+          topic: it.question.topic,
+          state: parseReviewItemState(it.reviewStateJson),
+        })),
+      });
+      const queueStatsAfter = await getQueueStats();
+      const nextStep = await getCompletionNextStep({
+        defaultHref: "/learn",
+        defaultTitleZh: "回到今日學習",
+        defaultDetailZh: "複習完成後，建議繼續完成 learning path 目前最高優先任務。",
+      });
+      return {
+        kind: "session",
+        sessionId: session.id,
+        status: "completed",
+        questions,
+        currentPosition: 0,
+        itemStatesJson: session.items.map((it) => it.reviewStateJson ?? null),
+        summary,
+        queueStatsAfter,
+        nextStep,
+      };
+    }
+  }
+
   if (session.status === "active" && firstInc !== null && requested !== firstInc) {
     redirect(`/review?session=${encodeURIComponent(session.id)}&pos=${firstInc}`);
   }

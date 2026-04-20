@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
+import ChoiceFeedbackPanel from "@/components/session/ChoiceFeedbackPanel";
 import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
 import CollapsibleNote from "@/components/ui/collapsible-note";
 import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
 import SectionLabel from "@/components/ui/section-label";
+import { buildChoiceFeedback } from "@/lib/choice-feedback";
 import { splitExplanationForFeedback } from "@/lib/explanation-split";
 import type { CompletionNextStep } from "@/lib/session-summary";
 import type { RatingPreviewMap, ReviewQuestionPayload } from "@/lib/review-page-loader";
@@ -262,6 +264,22 @@ export default function ReviewSessionClient({
   const explanationText =
     (q.explanation && q.explanation.trim().length > 0 ? q.explanation : null) ?? explanationFallbackCopy();
   const ratingExpl = splitExplanationForFeedback(explanationText);
+  const choiceFeedbackReview = useMemo(() => {
+    if (!awaitingRating) return null;
+    const timedOut = Boolean(st.timedOut) || st.userChoice === REVIEW_TIMEOUT_USER_CHOICE;
+    return buildChoiceFeedback({
+      questionText: q.questionText,
+      optionA: q.optionA,
+      optionB: q.optionB,
+      optionC: q.optionC,
+      optionD: q.optionD,
+      selectedChoice: st.userChoice ?? "—",
+      correctChoice: q.correctAnswer,
+      isCorrect: Boolean(st.correct) && !timedOut,
+      explanation: explanationText,
+      timedOut,
+    });
+  }, [awaitingRating, q, st.correct, st.timedOut, st.userChoice, explanationText]);
 
   if (awaitingRating) {
     const previews = ratingPreviews;
@@ -306,27 +324,24 @@ export default function ReviewSessionClient({
             <SectionLabel kind="stem" />
             <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
           </div>
-          <div className="mt-4">
-            <SectionLabel kind="feedback" />
-            <div className="mt-2 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-            <div className="rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2">
-              <p className="text-xs text-slate-500">你選了 · Yours</p>
-              <p className="font-mono font-semibold">{st.userChoice ?? "—"}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2">
-              <p className="text-xs text-slate-500">正解 · Correct</p>
-              <p className="font-mono font-semibold text-emerald-700">{q.correctAnswer}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200/90 bg-slate-50/80 px-3 py-2">
-              <p className="text-xs text-slate-500">用時 · Time</p>
-              <p className="font-semibold">{st.timeTakenSec?.toFixed(0) ?? "—"}s</p>
-            </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+            <span className="text-xs text-slate-500">
+              用時 · Time: <span className="font-semibold text-slate-800">{st.timeTakenSec?.toFixed(0) ?? "—"}s</span>
+            </span>
           </div>
-          </div>
-          {ratingExpl.summary ? (
-            <p className="mt-4 max-w-prose text-sm leading-relaxed text-slate-800">
-              <span className="font-semibold text-slate-600">關鍵差別 · Key:</span> {ratingExpl.summary}
-            </p>
+          {choiceFeedbackReview ? (
+            <div className="mt-4">
+              <ChoiceFeedbackPanel
+                feedback={choiceFeedbackReview}
+                tone={
+                  st.timedOut || st.userChoice === REVIEW_TIMEOUT_USER_CHOICE
+                    ? "timeout"
+                    : st.correct
+                      ? "correct"
+                      : "wrong"
+                }
+              />
+            </div>
           ) : null}
           {ratingExpl.detail.trim().length > 0 ? (
             <CollapsibleNote summaryZh="正解解釋（完整）" summaryEn="Full explanation" className="mt-3">

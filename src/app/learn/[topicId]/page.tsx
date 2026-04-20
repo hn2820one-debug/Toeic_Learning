@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import { getLearnTopicPageData } from "@/lib/learn-topic-page";
-import { clampCardIndex, parseLessonBodyToMicroCards } from "@/lib/parse-lesson-micro-cards";
+import { clampCardIndex, markdownToDisplayBlocks } from "@/lib/learn/lesson-display";
 
 import LearnTopicClient from "./LearnTopicClient";
 
@@ -42,10 +42,10 @@ export default async function LearnTopicPage({ params, searchParams }: LearnTopi
   );
 
   const currentLesson = data.lessons[lessonPos];
-  const microCards = parseLessonBodyToMicroCards(currentLesson?.bodyMarkdown ?? "");
+  const displayBlocks = markdownToDisplayBlocks(currentLesson?.bodyMarkdown ?? "");
   const cardPos = parseCardIndex(
     typeof searchParams?.card === "string" ? searchParams.card : undefined,
-    microCards.length,
+    displayBlocks.length,
   );
 
   return (
@@ -62,7 +62,7 @@ export default async function LearnTopicPage({ params, searchParams }: LearnTopi
         topicLabel={data.topicLabel}
         lessons={data.lessons}
         lessonPos={lessonPos}
-        microCards={microCards}
+        displayBlocks={displayBlocks}
         cardPos={cardPos}
         learnProgress={data.learnProgress}
         stage={data.stage}

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 
-import SafeMarkdown from "@/components/learn/SafeMarkdown";
+import LessonMicroCardBody from "@/components/learn/LessonMicroCardBody";
+import LessonProgressHeader from "@/components/learn/LessonProgressHeader";
 import AppCard from "@/components/ui/AppCard";
 import type { LearnTopicLessonRow } from "@/lib/learn-topic-page";
 import type { LearnProgressPayload } from "@/lib/learn-progress-json";
 import { isAllLessonsUnderstood } from "@/lib/learn-progress-json";
+import type { LessonMicroCard } from "@/lib/parse-lesson-micro-cards";
 import type { TopicProgressStage } from "../../../../generated/prisma";
 
 import {
@@ -22,6 +24,9 @@ type LearnTopicClientProps = {
   topicLabel: string;
   lessons: LearnTopicLessonRow[];
   lessonPos: number;
+  /** Micro-cards for the active lesson only (server-parsed). */
+  microCards: LessonMicroCard[];
+  cardPos: number;
   learnProgress: LearnProgressPayload;
   stage: TopicProgressStage | null;
   learnCompletedAtIso: string | null;
@@ -34,6 +39,8 @@ export default function LearnTopicClient({
   topicLabel,
   lessons,
   lessonPos,
+  microCards,
+  cardPos,
   learnProgress,
   stage,
   learnCompletedAtIso,
@@ -45,8 +52,12 @@ export default function LearnTopicClient({
   const seenSent = useRef<Set<number>>(new Set());
 
   const n = lessons.length;
-  const safePos = n === 0 ? 0 : Math.min(Math.max(0, lessonPos), n - 1);
-  const current = lessons[safePos] ?? null;
+  const safeLessonPos = n === 0 ? 0 : Math.min(Math.max(0, lessonPos), n - 1);
+  const current = lessons[safeLessonPos] ?? null;
+
+  const m = microCards.length;
+  const safeCardPos = m === 0 ? 0 : Math.min(Math.max(0, cardPos), m - 1);
+  const isLastCard = m > 0 && safeCardPos >= m - 1;
 
   const showLearnCompleteBanner = useMemo(() => {
     if (n === 0) {
@@ -62,21 +73,43 @@ export default function LearnTopicClient({
     if (!hasUser || n === 0) {
       return;
     }
-    if (seenSent.current.has(safePos)) {
+    if (seenSent.current.has(safeLessonPos)) {
       return;
     }
-    seenSent.current.add(safePos);
+    seenSent.current.add(safeLessonPos);
     startTransition(() => {
-      void markLessonSeenAction(topicKey, safePos);
+      void markLessonSeenAction(topicKey, safeLessonPos);
     });
-  }, [hasUser, n, safePos, topicKey]);
+  }, [hasUser, n, safeLessonPos, topicKey]);
+
+  const pushLessonQuery = useCallback(
+    (nextLesson: number, nextCard: number) => {
+      const lp = n === 0 ? 0 : Math.min(Math.max(0, nextLesson), n - 1);
+      const q = new URLSearchParams();
+      q.set("lesson", String(lp));
+      q.set("card", String(nextCard));
+      router.push(`/learn/${topicKey}?${q.toString()}`);
+    },
+    [n, router, topicKey],
+  );
 
   const goLesson = useCallback(
     (next: number) => {
-      const p = n === 0 ? 0 : Math.min(Math.max(0, next), n - 1);
-      router.push(`/learn/${topicKey}?lesson=${p}`);
+      const lp = n === 0 ? 0 : Math.min(Math.max(0, next), n - 1);
+      pushLessonQuery(lp, 0);
     },
-    [n, router, topicKey],
+    [n, pushLessonQuery],
+  );
+
+  const goCard = useCallback(
+    (next: number) => {
+      if (m <= 0) {
+        return;
+      }
+      const cp = Math.min(Math.max(0, next), m - 1);
+      pushLessonQuery(safeLessonPos, cp);
+    },
+    [m, pushLessonQuery, safeLessonPos],
   );
 
   const onUnderstood = () => {
@@ -84,7 +117,7 @@ export default function LearnTopicClient({
       return;
     }
     startTransition(() => {
-      void markLessonUnderstoodAction(topicKey, safePos).then(() => router.refresh());
+      void markLessonUnderstoodAction(topicKey, safeLessonPos).then(() => router.refresh());
     });
   };
 
@@ -95,7 +128,6 @@ export default function LearnTopicClient({
     startTransition(() => {
       void requestReExplanationAction(topicKey, current.id).then(() => {
         router.refresh();
-        // Placeholder UX — no LLM in this slice
         alert("已記錄「再解釋一次」次數（後台統計）。進階 AI 重述將另接，不在此步驟。");
       });
     });
@@ -126,6 +158,8 @@ export default function LearnTopicClient({
     );
   }
 
+  const activeCard = m > 0 ? microCards[safeCardPos] : null;
+
   return (
     <div className="space-y-6">
       {showLearnCompleteBanner ? (
@@ -143,69 +177,126 @@ export default function LearnTopicClient({
         </AppCard>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">LEARN · 理解取向（不計分）</p>
-          <h1 className="text-xl font-bold text-slate-900">{topicLabel}</h1>
-          <p className="text-sm text-slate-500">
-            第 {safePos + 1} / {n} 節 · Lesson {safePos + 1} of {n}
-          </p>
+      <div className="rounded-2xl border border-slate-200/60 bg-gradient-to-b from-slate-50/90 to-slate-100/40 p-4 shadow-inner md:p-6">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">LEARN · 微課 · 一屏一概念</p>
+            <h1 className="text-xl font-bold text-slate-900">{topicLabel}</h1>
+          </div>
+          {!hasUser ? (
+            <p className="max-w-sm text-right text-xs text-amber-800">
+              未登入／未建立學習者：可閱讀內容，進度無法寫入資料庫。
+            </p>
+          ) : null}
         </div>
-        {!hasUser ? (
-          <p className="max-w-sm text-right text-xs text-amber-800">
-            未登入／未建立學習者：可閱讀內容，進度無法寫入資料庫。
-          </p>
-        ) : null}
+
+        <LessonProgressHeader
+          topicLabel={topicLabel}
+          lessonIndex={safeLessonPos}
+          lessonCount={n}
+          cardIndex={m > 0 ? safeCardPos : 0}
+          cardCount={m > 0 ? m : 1}
+          lessonTitleZh={current?.titleZh}
+          lessonTitleEn={current?.titleEn}
+        />
+
+        <div className="mt-8 min-h-[12rem]">
+          {!current?.bodyMarkdown?.trim() ? (
+            <AppCard padding="md" className="border-slate-200 bg-white/90">
+              <p className="text-sm text-slate-700">
+                此節正文未通過品質檢查或為空，暫不顯示。This segment failed QA or is empty.
+              </p>
+            </AppCard>
+          ) : m === 0 || !activeCard ? (
+            <AppCard padding="md" className="border-slate-200 bg-white/90">
+              <p className="text-sm text-slate-700">無法解析此節內容為微課卡。Unable to parse micro-cards.</p>
+            </AppCard>
+          ) : (
+            <LessonMicroCardBody card={activeCard} />
+          )}
+        </div>
+
+        <div className="mt-10 space-y-6 border-t border-slate-200/80 pt-8">
+          {current?.bodyMarkdown?.trim() && m > 0 ? (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={safeCardPos <= 0 || pending}
+                onClick={() => goCard(safeCardPos - 1)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← 上一個概念 · Previous card
+              </button>
+              <button
+                type="button"
+                disabled={isLastCard || pending}
+                onClick={() => goCard(safeCardPos + 1)}
+                className="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                下一步 · Next card
+              </button>
+            </div>
+          ) : null}
+
+          {current?.bodyMarkdown?.trim() && m > 0 ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={!hasUser || pending}
+                onClick={onReexplain}
+                className="text-sm font-semibold text-slate-600 underline decoration-slate-300 underline-offset-4 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ❓ 再解釋一次 · Re-explain
+              </button>
+            </div>
+          ) : null}
+
+          {current?.bodyMarkdown?.trim() && m > 0 && isLastCard ? (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={!hasUser || pending}
+                onClick={onUnderstood}
+                className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ✅ 我理解了 · Got it
+              </button>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3 border-t border-dashed border-slate-200/90 pt-6">
+            <button
+              type="button"
+              disabled={safeLessonPos <= 0 || pending}
+              onClick={() => goLesson(safeLessonPos - 1)}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              上一節 · Previous lesson
+            </button>
+            <button
+              type="button"
+              disabled={safeLessonPos >= n - 1 || pending}
+              onClick={() => goLesson(safeLessonPos + 1)}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              下一節 · Next lesson
+            </button>
+          </div>
+
+          {hasUser ? (
+            <p className="text-xs text-slate-500">
+              已標為理解：{learnProgress.understood.length} / {n} 節 · Understood lessons
+            </p>
+          ) : null}
+
+          <Link
+            href="/learn"
+            className="inline-block text-sm font-semibold text-primary-700 underline underline-offset-4 hover:text-primary-900"
+          >
+            ← 回今日學習 · Back to /learn
+          </Link>
+        </div>
       </div>
-
-      <AppCard padding="md">
-        {current?.bodyMarkdown?.trim() ? (
-          <SafeMarkdown markdown={current.bodyMarkdown} />
-        ) : (
-          <p className="text-sm text-slate-600">此節尚無正文（bodyMarkdown 為空）。</p>
-        )}
-
-        <div className="mt-8 flex flex-wrap gap-3 border-t border-slate-200 pt-6">
-          <button
-            type="button"
-            disabled={safePos <= 0 || pending}
-            onClick={() => goLesson(safePos - 1)}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            上一節 · Previous
-          </button>
-          <button
-            type="button"
-            disabled={!hasUser || pending}
-            onClick={onUnderstood}
-            className="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            我理解了 · Got it
-          </button>
-          <button
-            type="button"
-            disabled={!hasUser || pending}
-            onClick={onReexplain}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            再解釋一次 · Re-explain (stub)
-          </button>
-          <button
-            type="button"
-            disabled={safePos >= n - 1 || pending}
-            onClick={() => goLesson(safePos + 1)}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            下一節 · Next
-          </button>
-        </div>
-
-        {hasUser ? (
-          <p className="mt-4 text-xs text-slate-500">
-            已標為理解：{learnProgress.understood.length} / {n} 節 · Understood segments
-          </p>
-        ) : null}
-      </AppCard>
     </div>
   );
 }

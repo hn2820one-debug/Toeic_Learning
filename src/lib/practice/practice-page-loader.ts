@@ -34,6 +34,8 @@ export type PracticeQuestionPayload = {
   hints: { level1: string; level2: string; level3: string; qaPassed: boolean; fallbackUsed: boolean };
   explanation: string | null;
   correctAnswer: string;
+  /** Neutral in-session reinforcement label (variant revisit). */
+  reinforceBannerZh?: string;
 };
 
 export type PracticeCompletedSummary = {
@@ -129,6 +131,7 @@ export async function getPracticePageView(params: {
   const tk = (session.topicKey as Phase1TopicKey | null) ?? topicKey;
 
   const questions: PracticeQuestionPayload[] = session.items.map((it) => {
+    const st = parsePracticeItemState(it.practiceStateJson);
     const q = it.question;
     const src = {
       questionText: q.questionText,
@@ -158,6 +161,7 @@ export async function getPracticePageView(params: {
       },
       explanation: q.explanation,
       correctAnswer: q.correctAnswer,
+      ...(st.reinforceBannerZh ? { reinforceBannerZh: st.reinforceBannerZh } : {}),
     };
   });
 

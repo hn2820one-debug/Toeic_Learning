@@ -204,6 +204,11 @@ export default function PracticeSessionClient({
       <LearningSurface>
         <AppCard padding="md" className="border-slate-200/80 bg-white/90">
         <div className="space-y-3">
+          {q.reinforceBannerZh ? (
+            <p className="rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-3 py-2 text-sm font-medium text-emerald-950">
+              {q.reinforceBannerZh}
+            </p>
+          ) : null}
           <SectionLabel kind="stem" />
           <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
         </div>

@@ -9,6 +9,8 @@ export type PracticeAttemptEntry = {
   /** Max hint layer (1–3) the learner had viewed before this submit; 0 = none. */
   hintsAtSubmit: number;
   answeredAt: string;
+  /** Reserved for timed practice — triggers in-session revisit when true. */
+  timedOut?: boolean;
 };
 
 export type PracticeHintViewEntry = {
@@ -24,6 +26,9 @@ export type PracticeItemState = {
   lastSubmitKey?: string;
   /** First user interaction on this item (hint or submit), ISO — used for hesitation / time-to-correct. */
   firstOpenedAt?: string;
+  /** In-session revisit banner — neutral copy, no “same question you missed”. */
+  reinforceBannerZh?: string;
+  reinforceKind?: "in_session";
 };
 
 export const MAX_SUBMIT_ATTEMPTS = 3;
@@ -58,6 +63,8 @@ export function parsePracticeItemState(raw: unknown): PracticeItemState {
     status,
     lastSubmitKey: typeof o.lastSubmitKey === "string" ? o.lastSubmitKey : undefined,
     firstOpenedAt: typeof o.firstOpenedAt === "string" ? o.firstOpenedAt : undefined,
+    reinforceBannerZh: typeof o.reinforceBannerZh === "string" ? o.reinforceBannerZh : undefined,
+    reinforceKind: o.reinforceKind === "in_session" ? "in_session" : undefined,
   };
 }
 

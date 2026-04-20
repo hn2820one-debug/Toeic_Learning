@@ -26,6 +26,10 @@ import {
 } from "@/lib/practice/practice-state";
 import { selectPracticeQuestionIds } from "@/lib/practice/select-practice-questions";
 import { prisma } from "@/lib/prisma";
+import {
+  mergeReinforceQueueIntoBaseIds,
+  planAndInsertSessionRevisit,
+} from "@/lib/session/revisit-planner";
 
 function isPhase1TopicKey(id: string): id is Phase1TopicKey {
   return (PHASE1_TOPIC_KEYS_IN_ORDER as readonly string[]).includes(id);
@@ -62,9 +66,30 @@ export async function startPracticeSession(topicKey: string): Promise<PracticeAc
   await ensureLearningTopic(topicKey);
   const mod = primaryModuleForTopic(topicKey);
 
-  const ids = await selectPracticeQuestionIds(topicKey, { userId: user.id });
-  if (ids.length === 0) {
+  const baseIds = await selectPracticeQuestionIds(topicKey, { userId: user.id });
+  if (baseIds.length === 0) {
     return { ok: false, error: "no_questions" };
+  }
+
+  const progressRow = await prisma.userTopicProgress.findUnique({
+    where: { userId_topicKey: { userId: user.id, topicKey } },
+    select: { practiceReinforceQueueJson: true },
+  });
+  const rawQueue = progressRow?.practiceReinforceQueueJson;
+  const reinforceQueue = Array.isArray(rawQueue)
+    ? rawQueue.filter((x): x is number => typeof x === "number")
+    : [];
+  const { ids, consumedIds, remainingQueue } = mergeReinforceQueueIntoBaseIds(baseIds, reinforceQueue, 2);
+  if (consumedIds.length > 0) {
+    await prisma.userTopicProgress.upsert({
+      where: { userId_topicKey: { userId: user.id, topicKey } },
+      create: {
+        userId: user.id,
+        topicKey,
+        practiceReinforceQueueJson: remainingQueue as unknown as Prisma.InputJsonValue,
+      },
+      update: { practiceReinforceQueueJson: remainingQueue as unknown as Prisma.InputJsonValue },
+    });
   }
 
   await prisma.learningSession.updateMany({
@@ -233,6 +258,25 @@ export async function submitPracticeAnswer(
       where: { id: item.id },
       data: { practiceStateJson: next as unknown as Prisma.InputJsonValue },
     });
+    const tk = session.topicKey;
+    if (tk && isPhase1TopicKey(tk)) {
+      await planAndInsertSessionRevisit({
+        sessionId,
+        userId: user.id,
+        topicKey: tk,
+        anchorPosition: position,
+        sourceQuestion: {
+          id: q.id,
+          questionText: q.questionText,
+          skillKey: q.skillKey,
+          topicKey: q.topicKey,
+          topic: q.topic,
+          difficulty: q.difficulty,
+        },
+        terminalStatus: "solved",
+        terminalState: next,
+      });
+    }
     revalidatePath("/practice");
     return { ok: true };
   }
@@ -266,6 +310,25 @@ export async function submitPracticeAnswer(
       where: { id: item.id },
       data: { practiceStateJson: next as unknown as Prisma.InputJsonValue },
     });
+    const tkReveal = session.topicKey;
+    if (tkReveal && isPhase1TopicKey(tkReveal)) {
+      await planAndInsertSessionRevisit({
+        sessionId,
+        userId: user.id,
+        topicKey: tkReveal,
+        anchorPosition: position,
+        sourceQuestion: {
+          id: q.id,
+          questionText: q.questionText,
+          skillKey: q.skillKey,
+          topicKey: q.topicKey,
+          topic: q.topic,
+          difficulty: q.difficulty,
+        },
+        terminalStatus: "revealed",
+        terminalState: next,
+      });
+    }
     revalidatePath("/practice");
     return { ok: true, revealAnswer };
   }

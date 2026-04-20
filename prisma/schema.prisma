@@ -212,6 +212,8 @@ model UserTopicProgress {
   testAccuracy    Float?
   /// Incremented each time a checkpoint run **finishes** (pass or fail).
   testAttempts    Int      @default(0)
+  /// Queued bank question ids for the next PRACTICE (deferred in-session revisits) — JSON number[]
+  practiceReinforceQueueJson Json?
   updatedAt DateTime @updatedAt
 
   @@unique([userId, topicKey])
@@ -272,6 +274,8 @@ model LearningSession {
   startedAt       DateTime             @default(now())
   endedAt         DateTime?
   abandonedAt     DateTime?
+  /// PRACTICE in-session revisit planner — see `src/lib/session/revisit-planner.ts`
+  revisitMetaJson Json?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 

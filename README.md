@@ -93,6 +93,20 @@ npm run dev
 
 Opens **http://127.0.0.1:5173** (port **5173** avoids common Windows reserved port issues—see older README note).
 
+**One-click browser (dev server already running):**
+
+```bash
+npm run open
+```
+
+**Start dev and open the site in your default browser** (~5s after start):
+
+```bash
+npm run dev:open
+```
+
+Optional: `DEV_URL` / `DEV_OPEN_DELAY_MS` env vars (see `scripts/open-site.mjs` and `scripts/dev-with-open.mjs`).
+
 ### Production build
 
 ```bash

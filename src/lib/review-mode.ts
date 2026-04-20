@@ -1,6 +1,6 @@
 /**
  * FSRS-backed REVIEW mode — `LearningSession.mode = review`, state in `reviewStateJson`.
- * Queue construction: `buildReviewSession` in `review-session-builder.ts` (uses `getTodayQueue` from `src/lib/fsrs.ts`).
+ * Queue construction: `buildReviewSession` in `src/lib/review/build-review-session.ts` (uses `getTodayQueue` from `src/lib/fsrs.ts`).
  */
 
 /** Looser than TEST (30s) — per product spec */
@@ -89,6 +89,8 @@ export type ReviewQueueSourceMeta = {
 export type ReviewQueueSummary = {
   totalItems: number;
   correctCount: number;
+  /** Mean seconds over items with `timeTakenSec` recorded */
+  avgTimeTakenSec: number | null;
   ratingCounts: Record<ReviewRatingName, number>;
   /** Sorted by `nextDueAt` ascending (soonest first), from persisted row state */
   soonestNext: { questionId: number; topic: string | null; nextDueAt: string }[];
@@ -112,6 +114,8 @@ export function buildReviewQueueSummary(params: {
     Easy: 0,
   };
   const withDue: { questionId: number; topic: string | null; nextDueAt: string }[] = [];
+  let timeSum = 0;
+  let timeCount = 0;
 
   for (const row of params.items) {
     const st = row.state;
@@ -120,6 +124,10 @@ export function buildReviewQueueSummary(params: {
     }
     if (st.rating) {
       ratingCounts[st.rating] += 1;
+    }
+    if (typeof st.timeTakenSec === "number" && Number.isFinite(st.timeTakenSec)) {
+      timeSum += st.timeTakenSec;
+      timeCount += 1;
     }
     if (st.nextDueAt) {
       withDue.push({
@@ -135,6 +143,7 @@ export function buildReviewQueueSummary(params: {
   return {
     totalItems: params.items.length,
     correctCount,
+    avgTimeTakenSec: timeCount === 0 ? null : timeSum / timeCount,
     ratingCounts,
     soonestNext: withDue.slice(0, 8),
   };

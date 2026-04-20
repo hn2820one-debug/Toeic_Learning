@@ -4,11 +4,14 @@ import { revalidatePath } from "next/cache";
 
 import type { Prisma } from "../../../generated/prisma";
 
-import { applyRating, previewIntervals, Rating, type RatingName as FsrsRatingName } from "@/lib/fsrs";
+import { previewIntervals, type RatingName as FsrsRatingName } from "@/lib/fsrs";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { logOpsWarn } from "@/lib/ops-log";
 import { prisma } from "@/lib/prisma";
 import { isDuplicateSubmitKey, normalizeSubmitKey } from "@/lib/session-guard";
+import { applyReviewRating } from "@/lib/review/apply-review-rating";
+import { buildReviewSession } from "@/lib/review/build-review-session";
+import { markReviewLearningSessionCompleted } from "@/lib/review/finalize-review-session";
 import {
   emptyReviewItemState,
   explanationFallbackCopy,
@@ -18,14 +21,6 @@ import {
   type ReviewItemStateJson,
   type ReviewRatingName,
 } from "@/lib/review-mode";
-import { buildReviewSession } from "@/lib/review-session-builder";
-
-const RATING_MAP: Record<ReviewRatingName, (typeof Rating)[keyof typeof Rating]> = {
-  Again: Rating.Again,
-  Hard: Rating.Hard,
-  Good: Rating.Good,
-  Easy: Rating.Easy,
-};
 
 export type ReviewActionResult = { ok: true } | { ok: false; error: string; detail?: string };
 
@@ -296,13 +291,13 @@ export async function submitReviewRating(
     return { ok: false, error: "already_rated" };
   }
 
-  if (!RATING_MAP[rating]) {
+  if (rating !== "Again" && rating !== "Hard" && rating !== "Good" && rating !== "Easy") {
     logRatingFailure("invalid_rating");
     return { ok: false, error: "invalid_rating" };
   }
 
   try {
-    const nextCard = await applyRating(q.id, RATING_MAP[rating]);
+    const nextCard = await applyReviewRating(q.id, rating);
     const ratedAt = new Date().toISOString();
     const nextDueAt = nextCard.due.toISOString();
 
@@ -335,13 +330,7 @@ export async function submitReviewRating(
     }
 
     if (isLast) {
-      await prisma.learningSession.update({
-        where: { id: sessionId },
-        data: {
-          status: "completed",
-          endedAt: new Date(),
-        },
-      });
+      await markReviewLearningSessionCompleted(sessionId);
     }
 
     revalidatePath("/review");

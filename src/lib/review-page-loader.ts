@@ -2,7 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { getQueueStats, previewIntervals, type RatingName as FsrsRatingName } from "@/lib/fsrs";
+import { getQueueStats, previewIntervals } from "@/lib/fsrs";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import {
   buildReviewQueueSummary,
@@ -11,27 +11,15 @@ import {
   isReviewItemRated,
   type ReviewQueueSummary,
 } from "@/lib/review-mode";
-import { buildReviewSession } from "@/lib/review-session-builder";
+import { buildReviewSession } from "@/lib/review/build-review-session";
+import type { ReviewQuestionPayload, ReviewRatingPreviewMap } from "@/lib/review/review-types";
 import { prisma } from "@/lib/prisma";
 import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
 import { getCompletionNextStep, type CompletionNextStep } from "@/lib/session-summary";
 
-export type ReviewQuestionPayload = {
-  id: number;
-  position: number;
-  questionText: string;
-  optionA: string;
-  optionB: string;
-  optionC: string;
-  optionD: string;
-  correctAnswer: string;
-  explanation: string | null;
-  topic: string;
-  topicKey: string | null;
-  difficulty: string;
-};
-
-export type RatingPreviewMap = Record<FsrsRatingName, { label: string }>;
+export type { ReviewQuestionPayload };
+/** @deprecated Use `ReviewRatingPreviewMap` from `@/lib/review/review-types`. */
+export type RatingPreviewMap = ReviewRatingPreviewMap;
 
 export type ReviewPageView =
   | { kind: "no_user" }

@@ -10,10 +10,14 @@ import {
   History,
   BarChart2,
   Upload,
+  GraduationCap,
+  Map,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", zh: "儀表板", en: "Dashboard", icon: LayoutDashboard },
+  { href: "/learn", zh: "今日學習", en: "Today's learning", icon: GraduationCap },
+  { href: "/progress", zh: "能力地圖", en: "Mastery map", icon: Map },
   { href: "/training", zh: "每日訓練", en: "Daily Training", icon: Dumbbell },
   { href: "/questions", zh: "題庫", en: "Question Bank", icon: BookOpen },
   { href: "/history", zh: "紀錄", en: "History", icon: History },

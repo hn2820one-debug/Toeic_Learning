@@ -22,8 +22,8 @@
     "test:fsrs": "node --conditions=react-server --import tsx scripts/test-fsrs.ts",
     "test:llm-env": "tsx scripts/test-llm-env.ts",
     "taxonomy:backfill": "tsx scripts/backfill-taxonomy.ts",
-    "test:learning-path": "node --import tsx --test src/lib/learning-path.test.ts",
-    "test:import-normalization": "node --import tsx --test src/lib/question-import-pipeline.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "generate:lessons": "tsx scripts/generate-lessons.ts"
   },
   "keywords": [],
@@ -58,6 +58,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/papaparse": "^5.5.2"
+    "@types/papaparse": "^5.5.2",
+    "vitest": "^3.2.4"
   }
 }

@@ -18,6 +18,14 @@ const HEADERS = [
   "correctAnswerSnapshot",
   "topicSnapshot",
   "difficultySnapshot",
+  "optionASnapshot",
+  "optionBSnapshot",
+  "optionCSnapshot",
+  "optionDSnapshot",
+  "explanationSnapshot",
+  "skillKeySnapshot",
+  "topicKeySnapshot",
+  "moduleKeySnapshot",
 ] as const;
 
 export async function GET(request: Request) {
@@ -42,6 +50,14 @@ export async function GET(request: Request) {
     correctAnswerSnapshot: h.correctAnswerSnapshot,
     topicSnapshot: h.topicSnapshot,
     difficultySnapshot: h.difficultySnapshot,
+    optionASnapshot: h.optionASnapshot ?? "",
+    optionBSnapshot: h.optionBSnapshot ?? "",
+    optionCSnapshot: h.optionCSnapshot ?? "",
+    optionDSnapshot: h.optionDSnapshot ?? "",
+    explanationSnapshot: h.explanationSnapshot ?? "",
+    skillKeySnapshot: h.skillKeySnapshot ?? "",
+    topicKeySnapshot: h.topicKeySnapshot ?? "",
+    moduleKeySnapshot: h.moduleKeySnapshot ?? "",
   }));
 
   const csv = `\uFEFF${rowsToCsv([...HEADERS], data)}`;

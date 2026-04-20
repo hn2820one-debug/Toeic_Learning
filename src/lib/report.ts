@@ -1,3 +1,4 @@
+import { resolveTopicDisplay } from "@/lib/answer-history-snapshots";
 import { prisma } from "@/lib/prisma";
 
 const SEVEN_DAY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -101,7 +102,7 @@ export async function getWeeklyReportData(now = new Date()): Promise<WeeklyRepor
 
   for (const session of sessions) {
     for (const answer of session.answerHistory) {
-      const topic = answer.topicSnapshot || answer.question.topic;
+      const topic = resolveTopicDisplay(answer.topicSnapshot, answer.question.topic);
       const current = topicMap.get(topic) ?? { totalAnswered: 0, correctCount: 0 };
 
       current.totalAnswered += 1;

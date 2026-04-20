@@ -22,7 +22,7 @@ function serializeChoicesSnapshot(question: {
   });
 }
 
-function hasMissingSnapshot(answer: {
+function hasMissingCoreSnapshot(answer: {
   stemSnapshot: string;
   choicesSnapshot: string;
   correctAnswerSnapshot: string;
@@ -78,7 +78,7 @@ async function main() {
   let updatedCount = 0;
 
   for (const row of rows) {
-    if (!hasMissingSnapshot(row)) {
+    if (!hasMissingCoreSnapshot(row)) {
       continue;
     }
 
@@ -122,11 +122,56 @@ async function main() {
     updatedCount += 1;
   }
 
+  const extendedRows = await prisma.answerHistory.findMany({
+    where: { optionASnapshot: null },
+    select: {
+      id: true,
+      question: {
+        select: {
+          questionText: true,
+          optionA: true,
+          optionB: true,
+          optionC: true,
+          optionD: true,
+          correctAnswer: true,
+          explanation: true,
+          topic: true,
+          difficulty: true,
+          skillKey: true,
+          topicKey: true,
+          moduleKey: true,
+        },
+      },
+    },
+    orderBy: { id: "asc" },
+  });
+
+  let extendedUpdated = 0;
+  for (const row of extendedRows) {
+    const q = row.question;
+    await prisma.answerHistory.update({
+      where: { id: row.id },
+      data: {
+        optionASnapshot: q.optionA,
+        optionBSnapshot: q.optionB,
+        optionCSnapshot: q.optionC,
+        optionDSnapshot: q.optionD,
+        explanationSnapshot: q.explanation,
+        skillKeySnapshot: q.skillKey ?? null,
+        topicKeySnapshot: q.topicKey ?? null,
+        moduleKeySnapshot: q.moduleKey ?? null,
+      },
+    });
+    extendedUpdated += 1;
+  }
+
   console.log(
     JSON.stringify({
       totalRows,
-      scannedRows: rows.length,
-      updatedRows: updatedCount,
+      scannedCoreRows: rows.length,
+      updatedCoreRows: updatedCount,
+      scannedExtendedRows: extendedRows.length,
+      updatedExtendedRows: extendedUpdated,
     }),
   );
 }

@@ -603,11 +603,20 @@ model AnswerHistory {
   selectedAnswer String
   isCorrect      Boolean
   answeredAt     DateTime         @default(now())
+  /// Question stem as shown when answered (same semantic as questionText snapshot).
   stemSnapshot          String   @default("")
   choicesSnapshot       String   @default("{}")
   correctAnswerSnapshot String   @default("")
   topicSnapshot         String   @default("")
   difficultySnapshot    String   @default("")
+  optionASnapshot       String?
+  optionBSnapshot       String?
+  optionCSnapshot       String?
+  optionDSnapshot       String?
+  explanationSnapshot   String?
+  skillKeySnapshot      String?
+  topicKeySnapshot      String?
+  moduleKeySnapshot     String?
 
   @@index([sessionId])
   @@index([questionId])

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { resolveChoicesAtAnswerTime, resolveExplanationForExplain, resolveStemDisplay } from "@/lib/answer-history-snapshots";
 import { generateWrongAnswerExplanation, WrongAnswerExplanationError } from "@/lib/llm/haiku-explain";
 import { prisma } from "@/lib/prisma";
 
@@ -108,26 +109,6 @@ function normalizeDirectExplainBody(body: DirectExplainBody): NormalizedExplainI
   return normalized;
 }
 
-function parseChoicesSnapshot(value: string) {
-  const parsed = JSON.parse(value) as Record<string, unknown>;
-
-  if (
-    typeof parsed.A !== "string" ||
-    typeof parsed.B !== "string" ||
-    typeof parsed.C !== "string" ||
-    typeof parsed.D !== "string"
-  ) {
-    throw new Error("choicesSnapshot did not contain valid A/B/C/D strings.");
-  }
-
-  return {
-    A: parsed.A,
-    B: parsed.B,
-    C: parsed.C,
-    D: parsed.D,
-  };
-}
-
 async function loadExplainInputFromAnswerHistory(answerHistoryId: number): Promise<NormalizedExplainInput> {
   const row = await prisma.answerHistory.findUnique({
     where: { id: answerHistoryId },
@@ -139,6 +120,11 @@ async function loadExplainInputFromAnswerHistory(answerHistoryId: number): Promi
       stemSnapshot: true,
       choicesSnapshot: true,
       correctAnswerSnapshot: true,
+      explanationSnapshot: true,
+      optionASnapshot: true,
+      optionBSnapshot: true,
+      optionCSnapshot: true,
+      optionDSnapshot: true,
       question: {
         select: {
           questionText: true,
@@ -157,16 +143,17 @@ async function loadExplainInputFromAnswerHistory(answerHistoryId: number): Promi
     throw new Error("AnswerHistory row not found.");
   }
 
-  const stem = row.stemSnapshot || row.question.questionText;
-  const choices =
-    row.choicesSnapshot && row.choicesSnapshot !== "{}"
-      ? parseChoicesSnapshot(row.choicesSnapshot)
-      : {
-          A: row.question.optionA,
-          B: row.question.optionB,
-          C: row.question.optionC,
-          D: row.question.optionD,
-        };
+  const stem = resolveStemDisplay(row.stemSnapshot, row.question.questionText);
+  const choices = resolveChoicesAtAnswerTime(
+    {
+      optionASnapshot: row.optionASnapshot,
+      optionBSnapshot: row.optionBSnapshot,
+      optionCSnapshot: row.optionCSnapshot,
+      optionDSnapshot: row.optionDSnapshot,
+      choicesSnapshot: row.choicesSnapshot,
+    },
+    row.question,
+  );
   const correctAnswer = normalizeAnswerChoice(row.correctAnswerSnapshot || row.question.correctAnswer, "correctAnswer");
   const userChoice = normalizeAnswerChoice(row.selectedAnswer, "userChoice");
 
@@ -179,7 +166,7 @@ async function loadExplainInputFromAnswerHistory(answerHistoryId: number): Promi
     choices,
     correctAnswer,
     userChoice,
-    explanationSnapshot: row.question.explanation ?? undefined,
+    explanationSnapshot: resolveExplanationForExplain(row.explanationSnapshot, row.question.explanation),
     questionId: row.questionId,
     sessionId: row.sessionId,
   };

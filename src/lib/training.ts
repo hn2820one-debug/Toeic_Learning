@@ -12,6 +12,7 @@ import {
 import { getDevUserIdForSession } from "./dev-user";
 import { prisma } from "./prisma";
 import { composeSession } from "./session-composer";
+import { buildAnswerHistorySnapshotData } from "./answer-history-snapshots";
 
 type SearchParamValue = string | string[] | undefined;
 
@@ -177,20 +178,6 @@ function parseNonNegativeInt(value: string | null) {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
-}
-
-function serializeChoicesSnapshot(question: {
-  optionA: string;
-  optionB: string;
-  optionC: string;
-  optionD: string;
-}) {
-  return JSON.stringify({
-    A: question.optionA,
-    B: question.optionB,
-    C: question.optionC,
-    D: question.optionD,
-  });
 }
 
 function getAccuracy(correctCount: number, totalQuestions: number) {
@@ -626,6 +613,9 @@ export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Pr
           topic: true,
           difficulty: true,
           explanation: true,
+          skillKey: true,
+          topicKey: true,
+          moduleKey: true,
         },
       },
     },
@@ -682,11 +672,7 @@ export async function submitTrainingAnswer(input: SubmitTrainingAnswerInput): Pr
           questionId: sessionItem.questionId,
           selectedAnswer: userChoice,
           isCorrect,
-          stemSnapshot: sessionItem.question.questionText,
-          choicesSnapshot: serializeChoicesSnapshot(sessionItem.question),
-          correctAnswerSnapshot: sessionItem.question.correctAnswer,
-          topicSnapshot: sessionItem.question.topic,
-          difficultySnapshot: sessionItem.question.difficulty,
+          ...buildAnswerHistorySnapshotData(sessionItem.question),
         },
       });
 

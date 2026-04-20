@@ -1,3 +1,9 @@
+import {
+  resolveCorrectAnswerLetter,
+  resolveDifficultyDisplay,
+  resolveStemDisplay,
+  resolveTopicDisplay,
+} from "@/lib/answer-history-snapshots";
 import { prisma } from "@/lib/prisma";
 
 export type HistoryAnswer = {
@@ -84,13 +90,13 @@ export async function getCompletedStudySessions(): Promise<HistorySession[]> {
       answers: session.answerHistory.map((answer) => ({
         id: answer.id,
         questionId: answer.questionId,
-        questionText: answer.stemSnapshot || answer.question.questionText,
+        questionText: resolveStemDisplay(answer.stemSnapshot, answer.question.questionText),
         selectedAnswer: answer.selectedAnswer,
-        correctAnswer: answer.correctAnswerSnapshot || answer.question.correctAnswer,
+        correctAnswer: resolveCorrectAnswerLetter(answer.correctAnswerSnapshot, answer.question.correctAnswer),
         isCorrect: answer.isCorrect,
         answeredAt: answer.answeredAt,
-        topic: answer.topicSnapshot || answer.question.topic,
-        difficulty: answer.difficultySnapshot || answer.question.difficulty,
+        topic: resolveTopicDisplay(answer.topicSnapshot, answer.question.topic),
+        difficulty: resolveDifficultyDisplay(answer.difficultySnapshot, answer.question.difficulty),
       })),
     };
   });

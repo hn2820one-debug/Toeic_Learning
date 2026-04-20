@@ -26,6 +26,31 @@ enum UserRole {
   ADMIN
 }
 
+/// Mastery stage per canonical topic (Phase1TopicKey) for a user. See docs/learning-loop-schema-notes.md
+enum TopicProgressStage {
+  New
+  Introduced
+  Practiced
+  Tested
+  Mastered
+  Maintained
+}
+
+/// Closed-loop session intent for /learn, /practice, /test, /review routes. Distinct from legacy StudySession.mode string.
+enum LearningSessionMode {
+  learn
+  practice
+  test
+  review
+  mixed
+}
+
+enum LearningSessionStatus {
+  active
+  completed
+  abandoned
+}
+
 // ─────────────────────────────────────────────
 //  USERS & ACCESS (multi-tenant foundation — no OAuth in this repo yet)
 // ─────────────────────────────────────────────
@@ -46,6 +71,13 @@ model User {
   enrollments   Enrollment[]
   preferences   UserPreference[]
   studySessions StudySession[]
+
+  programProgressRows  ProgramProgress[]
+  moduleProgressRows   ModuleProgress[]
+  topicProgressRows    UserTopicProgress[]
+  learningLoopSessions LearningSession[]
+  studyTasks           StudyTask[]
+  checkpointAttempts   CheckpointAttempt[]
 
   @@unique([externalAuthProvider, externalUserId])
   @@map("users")
@@ -93,6 +125,225 @@ model UserPreference {
 
   @@unique([userId, key])
   @@map("user_preferences")
+}
+
+// ─────────────────────────────────────────────
+//  CLOSED-LOOP CURRICULUM & EXECUTION (Phase 1 keys; see docs/erd-v2.md, docs/learning-loop-schema-notes.md)
+//  QuestionBankItem remains the only question bank — LessonPracticeItem links lessons to bank rows.
+// ─────────────────────────────────────────────
+
+/// Canonical topic row — topicKey matches Phase1TopicKey (e.g. office, finance).
+model LearningTopic {
+  topicKey   String @id
+  /// Sort order for planners; when null in app logic, fall back to `PHASE1_TOPIC_KEYS_IN_ORDER` in content.
+  orderIndex Int    @default(0)
+  labelZh    String?
+  labelEn    String?
+
+  userTopicProgress UserTopicProgress[]
+
+  @@index([orderIndex])
+  @@map("learning_topics")
+}
+
+/// Lesson slice within a module; moduleKey + lessonIndex align with src/content/programs/phase1/modules.ts outlines.
+model Lesson {
+  id          String @id @default(cuid())
+  moduleKey   String
+  lessonIndex Int
+  titleZh     String
+  titleEn     String
+  /// Phase1 topic key when this row is a topic-scoped capsule (content factory). Multiple rows per topic use distinct `lessonIndex`.
+  topicKey    String?
+  /// Traditional-Chinese Markdown body (fixed section headings). Filled by admin LLM pipeline, not by learner requests.
+  bodyMarkdown String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessonPracticeItems LessonPracticeItem[]
+  learningSessions    LearningSession[]
+
+  @@unique([moduleKey, lessonIndex])
+  @@index([moduleKey])
+  @@index([topicKey])
+  @@index([topicKey, lessonIndex])
+  @@map("lessons")
+}
+
+/// Join: which bank questions belong to a lesson (ordering for UI / planners).
+model LessonPracticeItem {
+  id                 String           @id @default(cuid())
+  lessonId           String
+  lesson             Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questionBankItemId Int
+  question           QuestionBankItem @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  position           Int
+
+  @@unique([lessonId, questionBankItemId])
+  @@unique([lessonId, position])
+  @@index([questionBankItemId])
+  @@map("lesson_practice_items")
+}
+
+/// Per-user progress for a canonical topic (FSRS/Elo stay global until scoped per user in a later migration).
+model UserTopicProgress {
+  id        String @id @default(cuid())
+  userId    Int
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicKey  String
+  topic     LearningTopic @relation(fields: [topicKey], references: [topicKey], onDelete: Cascade)
+  stage     TopicProgressStage @default(New)
+  attempts  Int    @default(0)
+  correct   Int    @default(0)
+  /// LEARN phase: { "seen": number[], "understood": number[], "reexplain": Record<lessonId, number> } — indices are 0-based order within topic lessons.
+  learnProgressJson Json?
+  learnCompletedAt  DateTime?
+  /// Last time a scaffolded practice run **passed** (effective rule).
+  practicePassedAt   DateTime?
+  /// `effectiveAccuracy` from the last **passed** practice run.
+  practiceAccuracy   Float?
+  /// Incremented each time a practice run **passes** (closed-loop counter).
+  practicePassCount  Int      @default(0)
+  /// Last time a timed checkpoint **passed** (topic test).
+  testPassedAt  DateTime?
+  /// `overallAccuracy` from the last **passed** checkpoint run.
+  testAccuracy    Float?
+  /// Incremented each time a checkpoint run **finishes** (pass or fail).
+  testAttempts    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, topicKey])
+  @@index([userId])
+  @@map("user_topic_progress")
+}
+
+/// Per-user module progress — moduleKey matches Phase1ModuleKey.
+model ModuleProgress {
+  id                   String   @id @default(cuid())
+  userId               Int
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleKey            String
+  status               String   @default("not_started")
+  diagnosticAccuracy   Float?
+  checkpointAccuracy   Float?
+  lastStartedAt        DateTime?
+  lastCompletedAt      DateTime?
+  updatedAt            DateTime @updatedAt
+
+  @@unique([userId, moduleKey])
+  @@index([moduleKey])
+  @@map("module_progress")
+}
+
+/// Coarse program pointer (one row per user + programKey).
+model ProgramProgress {
+  id                       String   @id @default(cuid())
+  userId                   Int
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey               String
+  activeModuleKey          String?
+  phaseStatus              String?
+  lastRecommendedActionJson String?
+  updatedAt                DateTime @updatedAt
+
+  @@unique([userId, programKey])
+  @@index([programKey])
+  @@map("program_progress")
+}
+
+/// Formal closed-loop session — links to legacy StudySession when a trainer run exists (AnswerHistory / FSRS stay on StudySession).
+model LearningSession {
+  id              String               @id @default(cuid())
+  userId          Int
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey      String               @default("phase1")
+  moduleKey       String?
+  /// Phase1 topic key for practice/test flows (optional).
+  topicKey        String?
+  lessonId        String?
+  lesson          Lesson?              @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  mode            LearningSessionMode
+  status          LearningSessionStatus @default(active)
+  /// When set, the legacy trainer run that recorded answers / FSRS / ELO side effects.
+  studySessionId  Int?                 @unique
+  studySession    StudySession?        @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+  startedAt       DateTime             @default(now())
+  endedAt         DateTime?
+  abandonedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  items              LearningSessionItem[]
+  checkpointAttempts CheckpointAttempt[]
+  studyTasks         StudyTask[]
+
+  @@index([userId])
+  @@index([programKey])
+  @@index([moduleKey])
+  @@index([userId, topicKey, status])
+  @@map("learning_sessions")
+}
+
+/// Ordered question list for a learning session (before or alongside StudySessionQuestion when linked).
+model LearningSessionItem {
+  id                 String           @id @default(cuid())
+  learningSessionId  String
+  learningSession    LearningSession  @relation(fields: [learningSessionId], references: [id], onDelete: Cascade)
+  questionBankItemId Int
+  question           QuestionBankItem @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  position           Int
+  /// PRACTICE mode: hint views, attempts, resolution — see `src/lib/practice/practice-state.ts`
+  practiceStateJson  Json?
+  /// TEST mode: timed single-attempt — see `src/lib/test-mode.ts`
+  testStateJson      Json?
+
+  @@unique([learningSessionId, position])
+  @@index([questionBankItemId])
+  @@map("learning_session_items")
+}
+
+/// Deterministic checkpoint outcome (not LLM-owned).
+model CheckpointAttempt {
+  id                String   @id @default(cuid())
+  userId            Int
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleKey         String
+  learningSessionId String?
+  learningSession   LearningSession? @relation(fields: [learningSessionId], references: [id], onDelete: SetNull)
+  studySessionId    Int?
+  studySession      StudySession? @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+  accuracy          Float?
+  passThreshold     Float
+  passed            Boolean
+  summarySnapshot   String?
+  createdAt         DateTime @default(now())
+
+  @@index([userId])
+  @@index([moduleKey])
+  @@map("checkpoint_attempts")
+}
+
+/// Thin task queue for planners — taskType aligns with Phase1SessionMode strings in src/content/programs/phase1/types.ts
+model StudyTask {
+  id                 String   @id @default(cuid())
+  userId             Int
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey         String
+  moduleKey          String?
+  taskType           String
+  status             String   @default("pending")
+  scheduledFor       DateTime?
+  studySessionId     Int?
+  studySession       StudySession? @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+  learningSessionId  String?
+  learningSession    LearningSession? @relation(fields: [learningSessionId], references: [id], onDelete: SetNull)
+  skillKeysJson      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([programKey])
+  @@map("study_tasks")
 }
 
 // ─────────────────────────────────────────────
@@ -190,6 +441,8 @@ model QuestionBankItem {
   fsrsCardState FsrsCardState?
   reviewLogs    ReviewLog[]
   studySessionItems StudySessionQuestion[]
+  lessonPracticeItems LessonPracticeItem[]
+  learningSessionItems LearningSessionItem[]
 
   @@index([topic])
   @@index([difficulty])
@@ -312,6 +565,9 @@ model StudySession {
 
   answerHistory AnswerHistory[]
   items         StudySessionQuestion[]
+  closedLoopSession LearningSession?
+  checkpointAttempts CheckpointAttempt[]
+  studyTasks         StudyTask[]
 
   @@index([userId])
   @@map("study_sessions")

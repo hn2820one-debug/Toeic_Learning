@@ -1,6 +1,9 @@
+import type { Prisma } from "../../generated/prisma";
+
 import { prisma } from "@/lib/prisma";
 import {
   formatQuestionValidationMessage,
+  type NormalizedQuestionFields,
   type QuestionFieldInput,
   validateQuestionFields,
 } from "@/lib/question-fields";
@@ -41,6 +44,82 @@ type UpdateQuestionInput = QuestionMutationFieldInput & {
 };
 
 type CreateQuestionInput = QuestionMutationFieldInput;
+
+/** Shared Prisma payload for creates (manual, JSON import, tests). */
+export function buildQuestionBankCreateData(
+  validated: NormalizedQuestionFields,
+  options?: { defaultSourceQuality?: string },
+): Prisma.QuestionBankItemCreateInput {
+  const defaultSourceQuality = options?.defaultSourceQuality ?? "manual";
+
+  const data: Prisma.QuestionBankItemCreateInput = {
+    questionText: validated.questionText,
+    optionA: validated.optionA,
+    optionB: validated.optionB,
+    optionC: validated.optionC,
+    optionD: validated.optionD,
+    correctAnswer: validated.correctAnswer,
+    explanation: validated.explanation,
+    topic: validated.topic,
+    difficulty: validated.difficulty,
+    sourceQuality: validated.sourceQuality !== undefined ? validated.sourceQuality : defaultSourceQuality,
+  };
+
+  if (validated.skillKey !== undefined) {
+    data.skillKey = validated.skillKey;
+  }
+
+  if (validated.topicKey !== undefined) {
+    data.topicKey = validated.topicKey;
+  }
+
+  if (validated.moduleKey !== undefined) {
+    data.moduleKey = validated.moduleKey;
+  }
+
+  if (validated.priorKnown !== undefined) {
+    data.priorKnown = validated.priorKnown;
+  }
+
+  return data;
+}
+
+/** Prisma update payload: only sets taxonomy keys when present on the validated object (forms omit them). */
+export function buildQuestionBankUpdateData(validated: NormalizedQuestionFields): Prisma.QuestionBankItemUpdateInput {
+  const data: Prisma.QuestionBankItemUpdateInput = {
+    questionText: validated.questionText,
+    optionA: validated.optionA,
+    optionB: validated.optionB,
+    optionC: validated.optionC,
+    optionD: validated.optionD,
+    correctAnswer: validated.correctAnswer,
+    explanation: validated.explanation,
+    topic: validated.topic,
+    difficulty: validated.difficulty,
+  };
+
+  if (validated.skillKey !== undefined) {
+    data.skillKey = validated.skillKey;
+  }
+
+  if (validated.topicKey !== undefined) {
+    data.topicKey = validated.topicKey;
+  }
+
+  if (validated.moduleKey !== undefined) {
+    data.moduleKey = validated.moduleKey;
+  }
+
+  if (validated.sourceQuality !== undefined) {
+    data.sourceQuality = validated.sourceQuality;
+  }
+
+  if (validated.priorKnown !== undefined) {
+    data.priorKnown = validated.priorKnown;
+  }
+
+  return data;
+}
 
 function normalizeParam(value: SearchParamValue) {
   const normalized = Array.isArray(value) ? value[0] : value;
@@ -203,7 +282,7 @@ export async function createQuestionBankItem(input: CreateQuestionInput): Promis
 
   try {
     const question = await prisma.questionBankItem.create({
-      data: validation.data,
+      data: buildQuestionBankCreateData(validation.data, { defaultSourceQuality: "manual" }),
       select: {
         id: true,
       },
@@ -266,7 +345,7 @@ export async function updateQuestionBankItem(input: UpdateQuestionInput): Promis
 
   await prisma.questionBankItem.update({
     where: { id: questionId },
-    data: validation.data,
+    data: buildQuestionBankUpdateData(validation.data),
   });
 
   return {

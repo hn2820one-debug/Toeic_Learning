@@ -78,7 +78,12 @@ async function insertPersonalizedBank() {
   const BATCH_SIZE = 200;
   for (let i = 0; i < PERSONALIZED_PHASE1_BANK.length; i += BATCH_SIZE) {
     const batch = PERSONALIZED_PHASE1_BANK.slice(i, i + BATCH_SIZE);
-    await prisma.questionBankItem.createMany({ data: batch });
+    await prisma.questionBankItem.createMany({
+      data: batch.map((row) => ({
+        ...row,
+        sourceQuality: "seed",
+      })),
+    });
   }
 }
 

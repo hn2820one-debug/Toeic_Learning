@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { buildQuestionBankCreateData } from "@/lib/question-management";
 import {
   formatQuestionValidationMessage,
   type NormalizedQuestionFields,
@@ -79,6 +80,11 @@ function validateImportRow(record: unknown, rowNumber: number) {
     explanation: value.explanation,
     topic: value.topic,
     difficulty: value.difficulty,
+    skillKey: value.skillKey,
+    topicKey: value.topicKey,
+    moduleKey: value.moduleKey,
+    sourceQuality: value.sourceQuality,
+    priorKnown: value.priorKnown,
   });
 
   if (!validation.ok) {
@@ -193,7 +199,7 @@ export async function importQuestionBankRecords(records: unknown[]): Promise<Imp
     await prisma.$transaction(async (transaction) => {
       for (const row of rowsToCreate) {
         await transaction.questionBankItem.create({
-          data: row,
+          data: buildQuestionBankCreateData(row, { defaultSourceQuality: "import_json" }),
         });
       }
     });

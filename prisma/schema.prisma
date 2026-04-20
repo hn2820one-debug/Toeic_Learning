@@ -108,6 +108,15 @@ model QuestionBankItem {
   correctAnswer String
   explanation   String?
   notes         String?
+  /// Canonical Phase1 skill id (e.g. vocabulary.document-workflow). See docs/taxonomy-fields.md
+  skillKey      String?
+  /// Canonical Phase1 topic bucket (e.g. office). Distinct from display `topic` until backfill.
+  topicKey      String?
+  /// Target module id when aligned to curriculum (e.g. phase1-document-workflow).
+  moduleKey     String?
+  /// Provenance: seed | import_json | import_csv | manual | llm | reviewed | unknown
+  sourceQuality String?
+  /// Cold-start / seeding: user-known vs unknown; also used by FSRS seed scripts.
   priorKnown    Boolean?
   topic         String
   difficulty    String

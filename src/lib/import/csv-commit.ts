@@ -27,6 +27,7 @@ function mapRowToCreate(r: CsvValidRow) {
     explanation: r.explanation?.trim() ? r.explanation : null,
     notes,
     priorKnown: r.priorKnown === "true" ? true : r.priorKnown === "false" ? false : null,
+    sourceQuality: "import_csv",
   };
 }
 

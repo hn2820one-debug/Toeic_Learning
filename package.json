@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "verify:clean-db": "powershell -ExecutionPolicy Bypass -File scripts/verify-clean-db-rebuild.ps1",
     "db:generate": "prisma generate",
     "db:delete-session": "tsx scripts/delete-study-session.ts",
     "db:rebuild-phase1-bank": "tsx scripts/rebuild-personalized-phase1-bank.ts",

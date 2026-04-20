@@ -18,7 +18,7 @@ CREATE TABLE "new_learning_session_items" (
     CONSTRAINT "learning_session_items_learningSessionId_fkey" FOREIGN KEY ("learningSessionId") REFERENCES "learning_sessions" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "learning_session_items_questionBankItemId_fkey" FOREIGN KEY ("questionBankItemId") REFERENCES "questions" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
-INSERT INTO "new_learning_session_items" ("id", "learningSessionId", "position", "practiceStateJson", "questionBankItemId") SELECT "id", "learningSessionId", "position", "practiceStateJson", "questionBankItemId" FROM "learning_session_items";
+INSERT INTO "new_learning_session_items" ("id", "learningSessionId", "position", "practiceStateJson", "questionBankItemId", "testStateJson") SELECT "id", "learningSessionId", "position", NULL, "questionBankItemId", NULL FROM "learning_session_items";
 DROP TABLE "learning_session_items";
 ALTER TABLE "new_learning_session_items" RENAME TO "learning_session_items";
 CREATE INDEX "learning_session_items_questionBankItemId_idx" ON "learning_session_items"("questionBankItemId");
@@ -42,7 +42,7 @@ CREATE TABLE "new_user_topic_progress" (
     CONSTRAINT "user_topic_progress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "user_topic_progress_topicKey_fkey" FOREIGN KEY ("topicKey") REFERENCES "learning_topics" ("topicKey") ON DELETE CASCADE ON UPDATE CASCADE
 );
-INSERT INTO "new_user_topic_progress" ("attempts", "correct", "id", "learnCompletedAt", "learnProgressJson", "practiceAccuracy", "practicePassCount", "practicePassedAt", "stage", "topicKey", "updatedAt", "userId") SELECT "attempts", "correct", "id", "learnCompletedAt", "learnProgressJson", "practiceAccuracy", "practicePassCount", "practicePassedAt", "stage", "topicKey", "updatedAt", "userId" FROM "user_topic_progress";
+INSERT INTO "new_user_topic_progress" ("attempts", "correct", "id", "learnCompletedAt", "learnProgressJson", "practiceAccuracy", "practicePassCount", "practicePassedAt", "stage", "topicKey", "updatedAt", "userId", "testPassedAt", "testAccuracy", "testAttempts") SELECT "attempts", "correct", "id", NULL, NULL, NULL, 0, NULL, "stage", "topicKey", "updatedAt", "userId", NULL, NULL, 0 FROM "user_topic_progress";
 DROP TABLE "user_topic_progress";
 ALTER TABLE "new_user_topic_progress" RENAME TO "user_topic_progress";
 CREATE INDEX "user_topic_progress_userId_idx" ON "user_topic_progress"("userId");

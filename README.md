@@ -4,12 +4,12 @@
 
 **TOEIC Trainer** is a personal, local-first web app for TOEIC-style multiple-choice practice. It uses **Next.js 14 (App Router)**, **Prisma 7**, and **SQLite** (via the libSQL adapter). The app is past the “empty scaffold” stage: it has a working **dashboard**, **question bank with CRUD**, **JSON and CSV import**, **training with FSRS ratings**, **session history**, **weekly report**, **HTTP export APIs**, and **optional LLM-assisted features** (generation, verification, explanations, weekly narrative) when API keys are configured.
 
-**Maturity (honest):** Solid for **self-hosted daily study** on your machine: data stays in SQLite, core flows are implemented end-to-end. LLM features depend on external APIs, quotas, and keys—treat them as **optional enhancements**, not guaranteed production services. Listening content exists in the **schema** as legacy/stub models; the **current UI workflow** is centered on **reading-style** `QuestionBankItem` training, not a full listening player.
+**Maturity (honest):** Solid for **self-hosted daily study** on your machine: data stays in SQLite, core flows are implemented end-to-end. LLM features depend on external APIs, quotas, and keys—treat them as **optional enhancements**, not guaranteed production services. **Listening (Prompt 41–50 round):** there is a **listening workbook** UI (`/listening`) for **external video links + on-site workbook**—not an in-app media platform. Legacy listening tables may still exist in schema; the workbook flow uses `ListeningWorkbook` models.
 
 **Major workflows today:**
 
 - Use **Today's learning** (`/learn`) as the **closed-loop entry**: tasks are ranked **review → test → practice → new topic**, aligned with the home “next action” and `/progress` CTAs.
-- Open a **topic learn** page (`/learn/[topicId]`): read **Markdown lesson segments** (understanding-first: **no timer, no score**). Mark segments as understood; when the LEARN stage is complete, the UI points you to **topic practice** (`/practice`).
+- Open a **topic learn** page (`/learn/[topicId]`): **micro-lesson / card-style** presentation of Markdown lessons (understanding-first: **no timer, no score**). Content is parsed into **example-first** blocks when lesson Markdown follows the H2 section order (例句 → 信號 → 規則 → …). Mark lessons understood; when LEARN is complete, the UI points you to **topic practice** (`/practice`).
 - Browse and manage questions; import batches (JSON or CSV); optionally rebuild the **personalized Phase 1 bank** from seed data.
 - Start **daily training** (`/training`): questions are drawn from `QuestionBankItem`, answers and FSRS/ELO updates are persisted (the classic bank session, distinct from topic-scoped practice).
 - Review **history** and a rolling **7-day report** (with optional Gemini-powered weekly copy if configured).
@@ -21,7 +21,11 @@
 
 - **Dashboard (`/`):** Summary stats (e.g. bank size, due reviews, recent activity), grammar/topic-oriented widgets where data exists. **Next action** uses the same ranked task list as `/learn`. Bilingual UI labels (Chinese + English) on main pages.
 - **Today's learning (`/learn`):** Phase 1 **closed-loop** task list (badges: review / test / practice / learn) with links into **topic learn**, **practice**, **test**, and **review** routes as appropriate.
-- **Topic learn (`/learn/[topicId]`):** Renders persisted **`lessons`** rows (Markdown bodies via `SafeMarkdown`). Progress is stored in learner JSON (`learnProgress`); completing LEARN unlocks the practice CTA. If a topic has **no lessons**, an admin/dev runs `npm run generate:lessons` (see **`docs/lesson-generation-runbook.md`**).
+- **Topic learn (`/learn/[topicId]`):** Renders persisted **`lessons`** rows; Markdown is split into **pedagogical blocks** (examples, signals, rules, traps, micro-check, etc.) via `markdownToDisplayBlocks` — not one undifferentiated wall. Progress is stored in learner JSON (`learnProgress`); completing LEARN unlocks the practice CTA. If a topic has **no lessons**, an admin/dev runs `npm run generate:lessons` (see **`docs/lesson-generation-runbook.md`**).
+- **Warm-up (`/warmup`):** Short **activation** session (closed-loop `LearningSession`, mode `warmup`) — **scaffolded**, not a replacement for FSRS **review** or topic **test**. Linked from learn/practice/test entry points where offered.
+- **Topic practice (`/practice`):** Scaffolded Part-5-style MCQ with **three hint layers**, optional **prediction step** (early items, toggleable), **distractor-style feedback** after attempts, **hesitation / mastery-style** summary on completion, and **in-session delayed revisit** (variant-first; capped).
+- **Topic test (`/test`) / FSRS review (`/review`):** Timed or review flows; **same distractor-aware feedback component** where applicable. Review remains FSRS-backed; not the same as warm-up.
+- **Listening workbook (`/listening`):** Create or open a workbook: **open external video (e.g. YouTube) in a new tab**, complete rounds, transcript (default collapsed), dictation/shadowing, takeaway — **experimental / content-driven** (quality depends on authored workbook rows).
 - **Mastery map (`/progress`):** Phase 1 modules and per-topic stages; hrefs match the learning-path engine used by `/` and `/learn`.
 - **Question bank:** List, filter, and search by text, topic, and difficulty; search also matches **`notes`** (classification strings).
 - **Create / edit / delete:** `/questions/new` and `/questions/[id]/edit` with validation; delete is guarded by usage rules.
@@ -33,7 +37,7 @@
 - **Export routes:** `GET /api/export/questions`, `GET /api/export/history`, and `GET /api/export/backup` — see **Export API** below.
 - **LLM routes:** Under `/api/llm/` — for example Part 5 generate/verify, explain wrong answer, weekly report helper. Successful calls log usage in `LlmUsageLog`.
 - **Personalized Phase 1 bank:** Large curated bank in `prisma/seed-data/personalized-phase1-bank.ts`. A full reset and reload uses `npm run db:rebuild-phase1-bank` (this is **destructive** to runtime learning data — read warnings in this README and in the script before use).
-- **Listening schema:** `ListeningSetLegacy` and `ListeningQuestionLegacy` (legacy-oriented) and `ListeningSetV2` / `ListeningQuestionV2` (stub for future). There is **no first-class listening practice UI** in the current trainer flow.
+- **Listening — workbook UI:** `ListeningWorkbook` + `UserListeningWorkbookProgress` drive **`/listening`**. Older listening tables in schema (if present) are **not** the primary UX path; prefer the workbook flow for new content.
 
 ---
 
@@ -194,7 +198,8 @@ Behavior is implemented in `src/lib/export/auth.ts` (localhost vs shared secret)
 **Partial / variable:**
 
 - **LLM** features need keys, network, and provider quotas; costs accrue per `LlmUsageLog` semantics.
-- **Listening** tables are **not** driving the main training UI yet.
+- **Teaching-quality limits** in `src/lib/content/teaching-style.ts` are **not** fully enforced everywhere (hints still clip in `hint-builder` with local numbers; generators may exceed spec until wired).
+- **Prediction / revisit** depend on heuristics and pool depth; may skip or defer.
 - **Topic learn** pages show **no lessons** until rows exist in the DB (content is not generated on page load); use the lesson generation script or your own pipeline.
 - **Legacy tables** remain in SQLite for compatibility; some are unused by current pages.
 
@@ -221,6 +226,7 @@ Behavior is implemented in `src/lib/export/auth.ts` (localhost vs shared secret)
 Operational docs:
 
 - `docs/Operator-WI.md` — bilingual **operator / non-developer** guide (navigation, day-to-day use, what not to do).
+- `docs/teaching-quality-spec.md` — **authoring & UX tone** for lessons, hints, feedback, listening workbook (self-study, not marketing).
 - `docs/reliability-runbook.md`
 - `docs/backup-and-restore.md`
 - `docs/performance-watchpoints.md`
@@ -251,12 +257,15 @@ If the error mentions **`Cannot read properties of undefined (reading 'findMany'
 With `npm run dev`:
 
 1. `/learn` — task list loads; open a topic link if present.
-2. `/learn/<topicKey>` — lesson Markdown renders; segment navigation works (optional: run `npm run generate:lessons -- --topic=<topicKey>` first if empty).
-3. `/questions/new` — create one question.
-4. `/questions/[id]/edit` — edit and save.
-5. `/import` — CSV: choose file → Preview → Commit (or JSON section as offered).
-6. `/training` — complete a short session.
-7. `/history` — confirm the session appears.
+2. `/learn/<topicKey>` — lesson renders as **cards/blocks**; lesson + card navigation works (optional: run `npm run generate:lessons -- --topic=<topicKey>` first if empty).
+3. `/practice?topicKey=<topic>` — start practice; try hints, optional prediction (if enabled), wrong-answer feedback.
+4. `/warmup?topicKey=<topic>&flow=practice` — short warm-up (if linked).
+5. `/listening` — list or create workbook; open `/listening/<id>`; external video link works.
+6. `/questions/new` — create one question.
+7. `/questions/[id]/edit` — edit and save.
+8. `/import` — CSV: choose file → Preview → Commit (or JSON section as offered).
+9. `/training` — complete a short session.
+10. `/history` — confirm the session appears.
 
 ---
 

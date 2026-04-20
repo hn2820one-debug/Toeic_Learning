@@ -1,0 +1,66 @@
+================================================================================
+TOEIC Trainer — Prompt 41–50 Closeout Summary for Review
+================================================================================
+
+1. Purpose
+- Freeze and hand off the "Prompt 41–50" round of **UI and pedagogy improvements** for the closed-loop study experience (LEARN → PRACTICE → TEST → REVIEW and related flows).
+- Provide a single engineering handoff artifact: what shipped, what is partial, how it was validated, and what remains.
+
+2. Scope
+- **In scope (this round):** micro-lesson style LEARN UI, example-first lesson rendering, unified learning surfaces, distractor-aware MCQ feedback, warm-up mode, hesitation / "half-mastered" signals, in-session delayed revisit (practice), prediction step before options (learn/practice early items), listening workbook mode (external video + on-site workbook), and a documented **teaching quality spec** plus shared content constants.
+- **Explicitly out of scope:** multi-tenant SaaS hardening, production auth rollout, public hosting/deployment runbooks, full in-app video platform, and automated end-to-end browser tests beyond `npm run build`.
+
+3. Completion Status by Prompt
+- **Prompt 41 — LEARN micro-lesson card UI:** **Completed.** Topic learn uses lesson/card navigation (`lesson`, `card` query params), `LessonProgressHeader`, and `DisplayLessonBlockView` blocks (not a single scrolling wall of Markdown).
+- **Prompt 42 — Example-first lesson structure:** **Completed** for authored Markdown that follows the H2 section contract in `markdownToDisplayBlocks` (`src/lib/learn/lesson-display.ts`): 例句 → 識別信號 → 核心規則 → 常見錯誤 → 應試提示 → 快速自測.
+- **Prompt 43 — Unified teaching components / information density:** **Completed (scaffolded).** Shared `LearningSurface`, `LessonCard`, `SectionLabel`, `CollapsibleNote`, `TeachingMarkdown` patterns; density reduced vs raw markdown wall (exact polish varies by lesson content).
+- **Prompt 44 — Distractor analysis feedback:** **Completed** for closed-loop MCQ surfaces using `buildChoiceFeedback` + `ChoiceFeedbackPanel` (`practice`, `test`, `review`, `warmup` paths wired in code).
+- **Prompt 45 — 2-minute warm-up:** **Completed.** `/warmup` flow, `LearningSessionMode.warmup`, loaders/actions under `src/app/warmup/` and `src/lib/session/warmup*.ts`.
+- **Prompt 46 — Hesitation / half-mastered:** **Completed (analytics + UX summaries).** `src/lib/analytics/hesitation.ts`, aggregates, practice/test/review summaries where integrated; not a separate FSRS deck—signal feeds selection/summary.
+- **Prompt 47 — Session-internal delayed revisit (practice):** **Completed.** `src/lib/session/revisit-planner.ts`, `revisitMetaJson` on `LearningSession`, variant-first selection, defer to `practiceReinforceQueueJson` when session cannot fit.
+- **Prompt 48 — Prediction step:** **Completed (partial coverage by design).** `src/lib/practice/prediction.ts`, `PredictionStep`, user toggle; practice early positions + learn micro-check when metadata/heuristics apply—not every item.
+- **Prompt 49 — Listening workbook mode:** **Completed (minimal LMS).** `/listening`, `/listening/[id]`, `ListeningWorkbook` + `UserListeningWorkbookProgress` models; external link + on-page workbook (no in-app player).
+- **Prompt 50 — Teaching quality spec:** **Completed.** `docs/teaching-quality-spec.md` + `src/lib/content/teaching-style.ts`, `example-context.ts` (constants for authors; not all call sites wired to enforce limits yet).
+
+4. Files Changed (representative — see `git log` / `git diff` for exact list)
+- **Documentation:** `README.md`, `docs/Operator-WI.md`, `docs/closed-loop/README.md`, `docs/teaching-quality-spec.md`, `output to chatgpt.txt` (this file).
+- **LEARN / lesson:** `src/app/learn/**`, `src/components/learn/**`, `src/lib/learn/lesson-display.ts`, `lesson-parser.ts`, specs.
+- **Practice / analytics / session:** `src/app/practice/**`, `src/lib/practice/**`, `src/lib/session/revisit-planner.ts`, `src/lib/analytics/hesitation*.ts`, `prisma/schema.prisma`.
+- **Warm-up:** `src/app/warmup/**`, `src/lib/session/warmup.ts`, `warmup-page-loader.ts`.
+- **Feedback:** `src/lib/choice-feedback.ts`, `src/components/session/ChoiceFeedbackPanel.tsx`, consumers in `PracticeSessionClient`, `TestSessionClient`, `ReviewSessionClient`, `WarmupSessionClient`.
+- **Listening:** `src/app/listening/**`, `src/lib/listening/**`, `prisma/schema.prisma`, `prisma/seed.ts`.
+- **Prediction:** `src/components/practice/PredictionStep.tsx`, `PredictionPreferenceToggle.tsx`, `src/lib/practice/prediction.ts`.
+- **Layout:** `src/components/layout/Sidebar.tsx` (listening entry).
+- **Content standards:** `src/lib/content/teaching-style.ts`, `example-context.ts`.
+
+5. UX / Pedagogy Changes (short)
+- **LEARN:** One screen per "card" / block type where possible; bilingual section labels; micro-check can show a short prediction step before listed options (if enabled).
+- **Lesson pedagogy:** Server-side Markdown is split into ordered pedagogical blocks; **examples lead** when lesson Markdown follows the H2 template.
+- **Feedback:** Wrong answers aim for **why the choice looked plausible** + **decisive difference** + **one-sentence rule**, not only "correct is B".
+- **Warm-up:** Short activation quiz before main flow; does not replace FSRS review or topic test.
+- **Hesitation:** Surfaces "fluent vs hesitant vs struggling" style tiers for reflection and downstream selection hints—not a second grading system.
+- **Revisit:** After weak signals, practice may insert **delayed** extra items (variants first); capped per session; overflow goes to next-practice reinforce queue.
+- **Prediction:** Optional think-first step before four options on eligible early practice items and some micro-checks.
+- **Listening workbook:** User opens **YouTube (etc.) in a new tab**; same page holds rounds, transcript (default collapsed), dictation/shadowing, takeaway, tomorrow review points.
+
+6. Validation Performed
+- **`npm run build`:** **Passed** on the closeout machine immediately before packaging (Next.js compile + lint + typecheck).
+- **Automated tests:** No full `npm test` suite was required for this closeout; repository has some unit tests (e.g. hesitation, choice-feedback) where present.
+- **Manual / smoke browsing:** **Not performed as part of this automated closeout** (no playwright). Routes expected to exist: `/learn`, `/learn/[topicId]`, `/practice`, `/test`, `/review`, `/warmup`, `/listening`. Operators should click through once after pull.
+
+7. Known Limitations / Remaining Gaps
+- **Teaching-style limits** (`TEACHING_LENGTH_LIMITS`) are documented and centralized but **not universally enforced** in generators (hint-builder still uses its own clip values in places).
+- **Prediction / revisit** use heuristics; edge cases (thin question pools, very short stems) may skip features or defer to queue.
+- **Listening workbook** content is **authoring-driven**; demo seed is illustrative; transcript quality depends on DB content.
+- **Multi-user / auth:** still dev-user oriented; progress isolation is not a product-grade multi-tenant guarantee.
+- **Local working tree:** If any teammate had **uncommitted** experiments, resolve before relying on this handoff—prefer pulling the tagged closeout commits.
+
+8. Reviewer Questions
+- Are **distractor fields** in `explanation` / `notes` consistently strong enough for `buildChoiceFeedback` across imported items?
+- Should **hint length budgets** be mechanically aligned with `teaching-style.ts` in `hint-builder` / QA scripts?
+- Is **warm-up** positioned correctly in operator docs relative to **review** (FSRS) to avoid learner confusion?
+- Any **copy** in UI still reading like documentation instead of tutoring (per `docs/teaching-quality-spec.md`)?
+
+================================================================================
+End of Prompt 41–50 Closeout Summary
+================================================================================

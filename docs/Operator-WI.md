@@ -148,6 +148,54 @@
 
 **English:** Exports are **HTTP endpoints** for backup or migration, often used via browser or `curl`. By default they are **localhost-only** unless a shared secret is configured. **Never** expose export URLs publicly.
 
+### 5.11 主題學習（微課卡片）· Topic learn as micro-lessons
+
+**中文：** 進入 `/learn/主題代號` 後，教材會分成**一屏一步**的區塊（例句、信號、規則、易錯、小測等），不是一整頁密密麻麻的字。用「上一個概念／下一個概念」在同一課內移動；用「上一節／下一節」換課。**沒有計分、沒有計時**，重在看懂。若看到「預測步驟」勾選，可先回答一題結構式小問題，再展開選項（可關閉）。
+
+**English:** `/learn/<topic>` shows **one teaching block at a time** (examples, signals, rules, traps, micro-check). Navigate **Previous/Next card** within a lesson; **Previous/Next lesson** across lessons. **No score, no timer.** Optional **prediction step** before options on some micro-checks (toggle in UI).
+
+### 5.12 教材閱讀順序（例子優先）· Lesson reading order (example-first)
+
+**中文：** 當課文 Markdown 有照模板分節時，畫面順序會是：**例句／對照 → 識別信號 → 核心規則 → 常見錯誤 → （可選）應試提示 → 快速自測**。請先跟著例句與信號，再看規則，比較符合大腦運作。
+
+**English:** When lesson Markdown follows the H2 template, blocks render as **example → signals → rule → trap → (optional) tip → micro-check**. Follow examples before abstract rules.
+
+### 5.13 練習／驗收／複習的回饋 · Feedback on practice, test, review
+
+**中文：** 在**主題練習、驗收、複習**等選擇題裡，答錯時盡量會看到：**為什麼你選的看起來合理**、**正解與誤選的關鍵差異**、**一句可帶走的規則**——不是只寫「正解是 B」。這需要題目在後台有足夠的解析文字；若解析很空，畫面會變短或偏通用。
+
+**English:** In topic **practice**, **test**, and **review** MCQs, wrong answers aim to show **why your pick looked tempting**, **the decisive difference**, and **a one-line rule**—not only “the answer is B”. Quality depends on stored explanations.
+
+### 5.14 熱身 warm-up（兩分鐘級）· Warm-up
+
+**中文：** **熱身**是短時間「喚醒最近線索」的場次，**不代替**正式的「複習（FSRS）」或「驗收」。若從今日學習或練習頁看到熱身連結，可視需要點進去；跳過也不影響題庫本體，但正式路線仍以今日學習排序為準。
+
+**English:** **Warm-up** is a short activation quiz. It does **not** replace **review (FSRS)** or **test**. Optional from links on learn/practice flows.
+
+### 5.15 半掌握／猶豫訊號 · Hesitation / half-mastered signals
+
+**中文：** 練習結束後，有時會看到「快而準／猶豫／尚未掌握」類型的摘要。這是**學習訊號**，不是第二套成績單；可能影響之後抽題或熱身建議，但**不**等同於官方分數。
+
+**English:** After some practice runs, a **mastery-style summary** may appear (fluent / hesitant / struggling). It is a **learning signal**, not a second grade.
+
+### 5.16 聽力題本（外部影片）· Listening workbook (external video)
+
+**中文：** 側邊欄「聽力題本」→ `/listening`。可**建立**或**開啟**一個題本：用**新分頁**開 YouTube 等連結，回到本站依步驟聽答、看稿（逐字稿預設先摺疊）、做 dictation／跟讀、寫心得與隔日回顧。**站內沒有完整影音播放器**，請習慣「外開影片 + 站內題本」。
+
+**English:** **Sidebar → Listening** (`/listening`). Create or open a workbook: open the **video in a new tab**, then use the on-page steps. **No full in-app player**—workbook-first.
+
+### 5.17 哪些不算正式過關？ · What does not count as official pass/fail
+
+**中文：** **熱身**、部分**聽力題本**紀錄、以及練習中**輔助性**提示與訊號，主要幫你學習與調整節奏；**正式是否通過主題練習／驗收**仍以該模式的結算與進度欄位為準（請以畫面說明為主）。
+
+**English:** **Warm-up**, **listening workbook** progress, and **scaffolding hints** are mainly for learning rhythm; **official topic pass** follows practice/test completion rules shown in-app.
+
+### 5.18 實驗性或未完成 · Experimental / incomplete
+
+**中文：** 聽力題本內容需自行維護逐字稿與題目；預測步驟與補強抽題依題庫與規則可能**略過**。多帳號、雲端同步、正式登入產品化**不在**本機自用版保證範圍內。
+
+**English:** Listening workbook quality depends on content you store. Prediction/revisit may **skip** when data is thin. Multi-tenant cloud auth is **not** guaranteed in this self-use build.
+
 ---
 
 ## 6. 大改動之前先做什麼？ · Before big changes

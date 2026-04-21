@@ -11,6 +11,9 @@ export type Phase1SessionMode =
   | "mixed_practice";
 
 export type Phase1TopicKey =
+  | "onboarding"
+  | "grammar_svc"
+  | "grammar_svoo"
   | "office"
   | "notices"
   | "meetings"

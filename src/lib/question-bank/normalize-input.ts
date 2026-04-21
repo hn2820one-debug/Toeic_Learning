@@ -1,4 +1,5 @@
 import type { Prisma } from "../../../generated/prisma";
+import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { LEARNING_SKILLS_SEED } from "../../../prisma/seed-data/learning-skills";
 import type { NormalizedQuestionFields, QuestionFieldInput } from "@/lib/question-fields";
@@ -9,21 +10,7 @@ import { inferPrimaryLearningSkillCode } from "./infer-primary-learning-skill";
 
 const KNOWN_LEARNING_SKILL_CODES = new Set(LEARNING_SKILLS_SEED.map((s) => s.skillCode));
 
-const PHASE1_TOPIC_KEYS = new Set<string>([
-  "office",
-  "notices",
-  "meetings",
-  "coordination",
-  "hr",
-  "finance",
-  "operations",
-  "marketing",
-  "logistics",
-  "tech",
-  "communication",
-  "healthEnv",
-  "daily",
-]);
+const PHASE1_TOPIC_KEYS = new Set<string>(PHASE1_TOPIC_KEYS_IN_ORDER as readonly string[]);
 
 export type QuestionBankSourceKind = "manual" | "import_json" | "import_csv" | "llm" | "seed";
 

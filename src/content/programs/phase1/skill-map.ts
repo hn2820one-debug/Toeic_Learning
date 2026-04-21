@@ -1,6 +1,9 @@
 import type { Phase1SkillDefinition, Phase1TopicKey } from "./types";
 
 export const PHASE1_TOPIC_LABELS: Record<Phase1TopicKey, string> = {
+  onboarding: "入門與診斷 / Onboarding",
+  grammar_svc: "連綴動詞（SVC）/ Subject–Verb–Complement",
+  grammar_svoo: "授與動詞（SVOO）/ Double objects",
   office: "文書作業 / Office Admin",
   notices: "公告訊息 / Announcements",
   meetings: "商務會議 / Business Meetings",

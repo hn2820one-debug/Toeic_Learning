@@ -5,6 +5,9 @@ import type { Phase1TopicKey } from "./types";
  * Keep aligned with `PHASE1_TOPIC_LABELS` in skill-map.ts (same keys, stable sequence).
  */
 export const PHASE1_TOPIC_KEYS_IN_ORDER: readonly Phase1TopicKey[] = [
+  "onboarding",
+  "grammar_svc",
+  "grammar_svoo",
   "office",
   "notices",
   "meetings",

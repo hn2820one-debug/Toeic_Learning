@@ -30,6 +30,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "generate:lessons": "tsx scripts/generate-lessons.ts",
+    "gen:week1:lessons": "tsx scripts/generate-week1-lessons.ts",
     "qa:lessons": "tsx scripts/qa-lessons.ts",
     "qa:hints": "tsx scripts/qa-hints.ts"
   },

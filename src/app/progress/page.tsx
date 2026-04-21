@@ -5,8 +5,9 @@ import StageBadge from "@/components/progress/StageBadge";
 import AppCard from "@/components/ui/AppCard";
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import { LearningSurface, learningSectionGap } from "@/components/ui/learning-surface";
-import { buildProgressPageModel } from "@/lib/progress-view-model";
+import { getProgressMapView } from "@/lib/progress/get-progress-map";
 import { stageLabelBilingual } from "@/lib/stage-progress-actions";
+import { primaryButtonClass } from "@/lib/ui/form-classes";
 import type { TopicProgressStage } from "../../../generated/prisma";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 const LEGEND_STAGES: TopicProgressStage[] = ["New", "Introduced", "Practiced", "Tested", "Mastered", "Maintained"];
 
 export default async function ProgressPage() {
-  const model = await buildProgressPageModel();
+  const { model, moduleSummaries } = await getProgressMapView();
 
   const allNew =
     model.kind === "ready" &&
@@ -40,6 +41,37 @@ export default async function ProgressPage() {
       ) : null}
 
       <LearningSurface>
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          模組總覽 · By module
+        </h2>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {moduleSummaries.map((m) => (
+            <AppCard key={m.moduleKey} padding="md" className="border-slate-200/90">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{m.titleZh}</p>
+                  <p className="text-xs text-slate-500">{m.titleEn}</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                  {m.progressPct}%
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                已驗收以上 · {m.testedOrMaintainedCount} / {m.topicCount} 主題
+              </p>
+              {m.nextAction ? (
+                <Link href={m.nextAction.href} className={`${primaryButtonClass} mt-3 inline-block px-4 py-2 text-sm`}>
+                  {m.nextAction.labelZh}
+                </Link>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400">暫無下一步（或已全部維持）</p>
+              )}
+            </AppCard>
+          ))}
+        </div>
+      </section>
+
       <AppCard padding="md" className="mb-6 border-violet-100 bg-violet-50/50">
         <p className="text-sm text-violet-950">
           除了對／錯，系統也會標示「半掌握」（答對但慢、靠提示或重試才對）。詳見{" "}
@@ -151,8 +183,9 @@ export default async function ProgressPage() {
       </section>
 
       <p className="mt-10 max-w-prose text-center text-xs leading-relaxed text-slate-400">
-        全站「下一步」排序與本頁主題 CTA 皆來自同一套 learning path engine（<code className="rounded bg-slate-100 px-1">getRankedLearningTasks</code> /{" "}
-        <code className="rounded bg-slate-100 px-1">getTopicProgressActions</code>）。
+        全站「今日任務」排序來自 <code className="rounded bg-slate-100 px-1">buildComposedLearningTasks</code>
+        （含 StudyPlan／FSRS／主題階段）；本頁主題 CTA 仍用{" "}
+        <code className="rounded bg-slate-100 px-1">getTopicProgressActions</code>。
         儀表板與今日學習：
         <Link href="/" className="underline">
           首頁

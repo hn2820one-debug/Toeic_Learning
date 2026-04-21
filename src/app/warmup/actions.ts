@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { Prisma } from "../../../generated/prisma";
 
+import { revalidateCalendarForSessionStartedAt } from "@/lib/calendar/revalidate-calendar";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { buildFallbackExplanationFromQuestion } from "@/lib/content-qa";
@@ -178,6 +179,7 @@ export async function submitWarmupAnswer(
       data: { practiceStateJson: next as unknown as Prisma.InputJsonValue },
     });
     revalidatePath("/warmup");
+    revalidateCalendarForSessionStartedAt(session.startedAt);
     return { ok: true };
   }
 
@@ -211,6 +213,7 @@ export async function submitWarmupAnswer(
       data: { practiceStateJson: next as unknown as Prisma.InputJsonValue },
     });
     revalidatePath("/warmup");
+    revalidateCalendarForSessionStartedAt(session.startedAt);
     return { ok: true, revealAnswer };
   }
 
@@ -225,6 +228,7 @@ export async function submitWarmupAnswer(
     data: { practiceStateJson: next as unknown as Prisma.InputJsonValue },
   });
   revalidatePath("/warmup");
+  revalidateCalendarForSessionStartedAt(session.startedAt);
   return { ok: true };
 }
 

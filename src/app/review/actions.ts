@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { Prisma } from "../../../generated/prisma";
 
+import { revalidateCalendarForSessionStartedAt } from "@/lib/calendar/revalidate-calendar";
 import { previewIntervals, type RatingName as FsrsRatingName } from "@/lib/fsrs";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { logOpsWarn } from "@/lib/ops-log";
@@ -233,6 +234,7 @@ export async function submitReviewAnswer(
     explanationFallbackCopy();
 
   revalidatePath("/review");
+  revalidateCalendarForSessionStartedAt(session.startedAt);
 
   return {
     ok: true,
@@ -335,6 +337,7 @@ export async function submitReviewRating(
 
     revalidatePath("/review");
     revalidatePath("/learn");
+    revalidateCalendarForSessionStartedAt(session.startedAt);
 
     return { ok: true, sessionCompleted: isLast };
   } catch (error) {

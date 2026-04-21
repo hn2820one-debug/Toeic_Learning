@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 @theme {
+  /* Calendar cell backgrounds (read-only learning calendar) */
+  --color-background-secondary: #f1f5f9;
+  --color-calendar-success-base: #22c55e;
+  --color-background-success-20: color-mix(in srgb, var(--color-calendar-success-base) 20%, var(--color-background-secondary));
+  --color-background-success-50: color-mix(in srgb, var(--color-calendar-success-base) 50%, var(--color-background-secondary));
+  --color-background-success-80: color-mix(in srgb, var(--color-calendar-success-base) 80%, var(--color-background-secondary));
+  --color-text-success: #15803d;
+  --color-mode-learn: #2563eb;
+  --color-mode-practice: #ea580c;
+  --color-mode-test: #dc2626;
+  --color-mode-review: #15803d;
+  --color-mode-warmup: #7c3aed;
+
   --color-primary-50: #eef4ff;
   --color-primary-100: #dbe7ff;
   --color-primary-200: #bdd1ff;

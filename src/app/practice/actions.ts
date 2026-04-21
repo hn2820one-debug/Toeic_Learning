@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { Prisma, TopicProgressStage } from "../../../generated/prisma";
 
+import { revalidateCalendarForSessionStartedAt } from "@/lib/calendar/revalidate-calendar";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { buildFallbackExplanationFromQuestion } from "@/lib/content-qa";
@@ -259,6 +260,7 @@ export async function revealPracticeHint(
   });
 
   revalidatePath("/practice");
+  revalidateCalendarForSessionStartedAt(session.startedAt);
   return { ok: true };
 }
 
@@ -349,6 +351,7 @@ export async function submitPracticeAnswer(
       });
     }
     revalidatePath("/practice");
+    revalidateCalendarForSessionStartedAt(session.startedAt);
     return { ok: true };
   }
 
@@ -401,6 +404,7 @@ export async function submitPracticeAnswer(
       });
     }
     revalidatePath("/practice");
+    revalidateCalendarForSessionStartedAt(session.startedAt);
     return { ok: true, revealAnswer };
   }
 
@@ -415,6 +419,7 @@ export async function submitPracticeAnswer(
     data: { practiceStateJson: next as unknown as Prisma.InputJsonValue },
   });
   revalidatePath("/practice");
+  revalidateCalendarForSessionStartedAt(session.startedAt);
   return { ok: true };
 }
 
@@ -501,6 +506,7 @@ export async function completePracticeSession(sessionId: string): Promise<
 
   revalidatePath("/practice");
   revalidatePath("/learn");
+  revalidateCalendarForSessionStartedAt(session.startedAt);
   return {
     ok: true,
     rawCorrectRate: metrics.rawCorrectRate,

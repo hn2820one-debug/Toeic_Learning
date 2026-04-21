@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
+import { calendarMonthTagForDate } from "@/lib/calendar/calendar-tags";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { prisma } from "@/lib/prisma";
 
@@ -28,6 +29,7 @@ export async function toggleDayComplete(
       id: true,
       dayNumber: true,
       completed: true,
+      plannedDate: true,
       studyPlan: { select: { userId: true } },
     },
   });
@@ -47,6 +49,7 @@ export async function toggleDayComplete(
   });
 
   revalidatePath("/studyplan");
+  revalidateTag(calendarMonthTagForDate(item.plannedDate ?? new Date()));
   return { ok: true, dayNumber: item.dayNumber };
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { Prisma } from "../../../generated/prisma";
 
+import { revalidateCalendarForSessionStartedAt } from "@/lib/calendar/revalidate-calendar";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getOrCreateDevUser } from "@/lib/dev-user";
@@ -266,6 +267,7 @@ export async function submitTestAnswer(
     data: { testStateJson: next as unknown as Prisma.InputJsonValue },
   });
 
+  revalidateCalendarForSessionStartedAt(session.startedAt);
   return { ok: true };
 }
 
@@ -355,6 +357,7 @@ export async function completeTestSession(sessionId: string): Promise<
   revalidatePath("/test");
   revalidatePath("/learn");
   revalidatePath(`/learn/${topicKey}`);
+  revalidateCalendarForSessionStartedAt(session.startedAt);
 
   return {
     ok: true,

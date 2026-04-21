@@ -7,11 +7,12 @@ import {
   abandonStudySession,
   ACTIVE_SESSION_COOKIE_MAX_AGE_SECONDS,
   ACTIVE_SESSION_COOKIE_NAME,
-  createStudySession,
+  composeAndCreateTrainingSession,
   getTrainingHref,
-  pickTrainingQuestionIds,
   recordTrainingAnswerChoice,
   submitTrainingAnswer,
+  TRAINING_QUESTION_LIMIT,
+  type ComposeSessionInput,
 } from "@/lib/training";
 
 function setActiveSessionCookie(sessionId: number) {
@@ -37,15 +38,29 @@ function clearActiveSessionCookie() {
 }
 
 export async function startTrainingSessionAction() {
-  const questionIds = await pickTrainingQuestionIds();
+  const result = await composeAndCreateTrainingSession({
+    mode: "mixed_practice",
+    count: TRAINING_QUESTION_LIMIT,
+  });
 
-  if (questionIds.length === 0) {
+  if (!result.ok) {
     redirect(getTrainingHref({ notice: "no-questions" }));
   }
 
-  const session = await createStudySession(questionIds);
-  setActiveSessionCookie(session.id);
-  redirect(getTrainingHref({ sessionId: session.id }));
+  setActiveSessionCookie(result.sessionId);
+  redirect(getTrainingHref({ sessionId: result.sessionId }));
+}
+
+/** Mode-aware entry (diagnostic / lesson_drill / checkpoint / review / mixed_practice) — wire from learn/planner UIs later. */
+export async function startTrainingSessionFromComposeInputAction(input: ComposeSessionInput) {
+  const result = await composeAndCreateTrainingSession(input);
+
+  if (!result.ok) {
+    redirect(getTrainingHref({ notice: "no-questions" }));
+  }
+
+  setActiveSessionCookie(result.sessionId);
+  redirect(getTrainingHref({ sessionId: result.sessionId }));
 }
 
 export async function submitTrainingAnswerAction(formData: FormData) {

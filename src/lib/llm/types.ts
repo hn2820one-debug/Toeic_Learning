@@ -78,6 +78,53 @@ export interface Part5VerificationVerdict {
   suggested_fix?: string;
 }
 
+/**
+ * Reconciled v2 Part 5 item — includes the pedagogical payload persisted on
+ * QuestionBankItem (coreRule / recognitionSignal / hint1-3 / distractorAnalysisJson).
+ * Produced by `buildPart5GenerationV2Prompt`.
+ */
+export type Part5DistractorType =
+  | "correct"
+  | "part_of_speech_error"
+  | "tense_error"
+  | "collocation_error"
+  | "register_error"
+  | "form_confusion"
+  | "near_synonym"
+  | "false_friend"
+  | "plausible_wrong";
+
+export interface Part5DistractorEntry {
+  type: Part5DistractorType;
+  whyPlausible: string;
+  whyWrong: string;
+}
+
+export interface Part5GeneratedItemV2 {
+  stem: string;
+  choices: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
+  answer: "A" | "B" | "C" | "D";
+  targetSkillCode: string;
+  difficulty: string;
+  explanation_zh_hant: string;
+  coreRule: string;
+  recognitionSignal: string;
+  hint1: string;
+  hint2: string;
+  hint3: string;
+  distractorAnalysis: {
+    A: Part5DistractorEntry;
+    B: Part5DistractorEntry;
+    C: Part5DistractorEntry;
+    D: Part5DistractorEntry;
+  };
+}
+
 export interface SkillSignal {
   skillKey: string;
   category: string;

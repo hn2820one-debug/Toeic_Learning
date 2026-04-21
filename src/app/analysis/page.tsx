@@ -140,9 +140,9 @@ export default async function AnalysisPage() {
             <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2">
               <p className="text-xs font-semibold text-primary-700">Primary action</p>
               <p className="text-sm font-semibold text-primary-900">{data.nextSteps.primaryTask.type.toUpperCase()}</p>
-              <p className="text-sm text-primary-900">{data.nextSteps.primaryTask.reasonZh}</p>
+              <p className="text-sm text-primary-900">{data.nextSteps.primaryTask.reason}</p>
               <Link href={data.nextSteps.primaryTask.href} className="mt-2 inline-block rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white">
-                {data.nextSteps.primaryTask.ctaLabelZh}
+                前往 · Go
               </Link>
             </div>
           ) : null}

@@ -54,3 +54,19 @@ export type RankLearningTasksInput = {
     learn: string;
   };
 };
+
+/**
+ * Closed-loop “今日任務” row for `/learn` — single title/reason strings (bilingual copy can use ` · `).
+ * Aligns with mode-aware routes: checkpoint ≈ `/test`, review ≈ FSRS `/review`.
+ */
+export type ComposedLearningTask = {
+  type: "review" | "learn" | "practice" | "checkpoint";
+  title: string;
+  reason: string;
+  estimatedMins: number;
+  href: string;
+  moduleKey?: string;
+  topicKey?: string;
+  primaryLearningSkillCode?: string;
+  priority: number;
+};

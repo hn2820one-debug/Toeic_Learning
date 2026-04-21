@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Map,
   Headphones,
+  CalendarCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,6 +29,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: "/", zh: "儀表板", en: "Dashboard", icon: LayoutDashboard },
   { href: "/learn", zh: "今日學習", en: "Today's learning", icon: GraduationCap },
+  { href: "/studyplan", zh: "30 日計劃", en: "30-Day Plan", icon: CalendarCheck },
   { href: "/progress", zh: "能力地圖", en: "Mastery map", icon: Map },
   { href: "/listening", zh: "聽力題本", en: "Listening", icon: Headphones, prefixMatch: true },
   { href: "/training", zh: "每日訓練", en: "Daily Training", icon: Dumbbell },

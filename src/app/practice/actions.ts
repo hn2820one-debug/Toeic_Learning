@@ -24,6 +24,10 @@ import {
   parsePracticeItemState,
   type PracticeItemState,
 } from "@/lib/practice/practice-state";
+import { selectDualAxisPracticeQuestionIds } from "@/lib/practice/build-practice-session";
+import type { PracticeRuntimeMeta } from "@/lib/practice/practice-runtime-types";
+import { resolvePracticeQuestionCount } from "@/lib/practice/resolve-practice-count";
+import { parsePracticeRuntimeFromRevisitMeta } from "@/lib/practice/practice-session-runtime";
 import { selectPracticeQuestionIds } from "@/lib/practice/select-practice-questions";
 import { prisma } from "@/lib/prisma";
 import {
@@ -54,7 +58,29 @@ async function ensureLearningTopic(topicKey: Phase1TopicKey) {
 
 export type PracticeActionResult = { ok: true; sessionId?: string; error?: undefined } | { ok: false; error: string };
 
-export async function startPracticeSession(topicKey: string): Promise<PracticeActionResult> {
+export type StartPracticeSessionOptions = {
+  mode?: string;
+  skill?: string;
+  moduleKey?: string;
+  /** Overrides default length for dual-axis modes; capped 1–15 in resolver. */
+  count?: number;
+};
+
+function shouldUseDualAxisSelection(opts?: StartPracticeSessionOptions): boolean {
+  if (!opts) {
+    return false;
+  }
+  const m = opts.mode?.trim();
+  if (m === "lesson_drill" || m === "mixed_practice") {
+    return true;
+  }
+  return Boolean(opts.skill?.trim());
+}
+
+export async function startPracticeSession(
+  topicKey: string,
+  options?: StartPracticeSessionOptions,
+): Promise<PracticeActionResult> {
   if (!isPhase1TopicKey(topicKey)) {
     return { ok: false, error: "invalid_topic" };
   }
@@ -66,7 +92,38 @@ export async function startPracticeSession(topicKey: string): Promise<PracticeAc
   await ensureLearningTopic(topicKey);
   const mod = primaryModuleForTopic(topicKey);
 
-  const baseIds = await selectPracticeQuestionIds(topicKey, { userId: user.id });
+  const dualAxis = shouldUseDualAxisSelection(options);
+  const targetCount = dualAxis
+    ? resolvePracticeQuestionCount(options?.mode, options?.count)
+    : undefined;
+
+  let baseIds: number[];
+  let practiceRuntime: PracticeRuntimeMeta | undefined;
+
+  if (dualAxis && targetCount != null) {
+    const picked = await selectDualAxisPracticeQuestionIds({
+      topicKey,
+      skill: options?.skill?.trim() ?? null,
+      moduleKey: options?.moduleKey?.trim() ?? null,
+      count: targetCount,
+    });
+    if (picked.length > 0) {
+      baseIds = picked;
+      practiceRuntime = {
+        dualAxis: true,
+        mode: options?.mode,
+        skill: options?.skill?.trim() || undefined,
+        moduleKey: options?.moduleKey?.trim() || mod.moduleKey,
+        count: picked.length,
+      };
+    } else {
+      baseIds = await selectPracticeQuestionIds(topicKey, { userId: user.id });
+      practiceRuntime = undefined;
+    }
+  } else {
+    baseIds = await selectPracticeQuestionIds(topicKey, { userId: user.id });
+  }
+
   if (baseIds.length === 0) {
     return { ok: false, error: "no_questions" };
   }
@@ -105,6 +162,15 @@ export async function startPracticeSession(topicKey: string): Promise<PracticeAc
     },
   });
 
+  const revisitMetaJson: Prisma.InputJsonValue | undefined =
+    practiceRuntime != null
+      ? ({
+          v: 1,
+          revisitCount: 0,
+          practiceRuntime,
+        } as unknown as Prisma.InputJsonValue)
+      : ({ v: 1, revisitCount: 0 } as unknown as Prisma.InputJsonValue);
+
   const session = await prisma.learningSession.create({
     data: {
       userId: user.id,
@@ -113,6 +179,7 @@ export async function startPracticeSession(topicKey: string): Promise<PracticeAc
       topicKey,
       mode: "practice",
       status: "active",
+      revisitMetaJson,
       items: {
         create: ids.map((questionBankItemId, position) => ({
           questionBankItemId,
@@ -140,6 +207,10 @@ async function loadOwnedSession(userId: number, sessionId: string) {
   });
 }
 
+function sessionAllowsLastQuestionHints(revisitMetaJson: unknown): boolean {
+  return parsePracticeRuntimeFromRevisitMeta(revisitMetaJson)?.dualAxis === true;
+}
+
 export async function revealPracticeHint(
   sessionId: string,
   position: number,
@@ -159,8 +230,8 @@ export async function revealPracticeHint(
     return { ok: false, error: "invalid_position" };
   }
 
-  /** Last question (index 9): no hints — “預熱題” UX */
-  if (position === session.items.length - 1) {
+  /** Legacy 10-question flow: last item is “warm-up” without hints. Dual-axis sessions allow hints on all items. */
+  if (position === session.items.length - 1 && !sessionAllowsLastQuestionHints(session.revisitMetaJson)) {
     return { ok: false, error: "hints_disabled" };
   }
 

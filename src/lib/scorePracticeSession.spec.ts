@@ -1,60 +1,75 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  computePracticeOutcome,
-  HINT_PENALTY_PER_VIEW,
-  PASS_MIN_EFFECTIVE,
-  PASS_MIN_RAW_RATE,
-} from "@/lib/practice/practice-result-rules";
+import { computePracticeOutcome, HINT_PENALTY_CAP } from "@/lib/practice/practice-result-rules";
 
-describe("computePracticeOutcome", () => {
-  it("computes rawCorrectRate, hintPenalty, effectiveAccuracy, passed", () => {
+const q = (partial: {
+  firstTryCorrect: boolean;
+  hintEvents: number;
+  firstTryNoHint: boolean;
+}) => partial;
+
+describe("computePracticeOutcome (v2)", () => {
+  it("computes raw, effectiveAccuracy, no-hint rate, and pass when raw ≥ 0.7", () => {
     const out = computePracticeOutcome({
       questions: [
-        { firstTryCorrect: true, hintEvents: 0 },
-        { firstTryCorrect: true, hintEvents: 0 },
-        { firstTryCorrect: false, hintEvents: 0 },
-        { firstTryCorrect: true, hintEvents: 0 },
-        { firstTryCorrect: true, hintEvents: 0 },
+        q({ firstTryCorrect: true, hintEvents: 0, firstTryNoHint: true }),
+        q({ firstTryCorrect: true, hintEvents: 0, firstTryNoHint: true }),
+        q({ firstTryCorrect: false, hintEvents: 0, firstTryNoHint: false }),
+        q({ firstTryCorrect: true, hintEvents: 0, firstTryNoHint: true }),
+        q({ firstTryCorrect: true, hintEvents: 0, firstTryNoHint: true }),
       ],
     });
     expect(out.rawCorrectRate).toBe(0.8);
     expect(out.totalHintsUsed).toBe(0);
     expect(out.hintPenalty).toBe(0);
     expect(out.effectiveAccuracy).toBe(0.8);
+    expect(out.noHintCorrectRate).toBe(0.8);
     expect(out.passed).toBe(true);
   });
 
-  it("applies capped hint penalty to effectiveAccuracy", () => {
+  it("subtracts session-level hint weight from raw for effectiveAccuracy", () => {
     const n = 5;
     const hintsPerQ = 10;
     const out = computePracticeOutcome({
-      questions: Array.from({ length: n }, () => ({
-        firstTryCorrect: true,
-        hintEvents: hintsPerQ,
-      })),
+      questions: Array.from({ length: n }, () =>
+        q({ firstTryCorrect: true, hintEvents: hintsPerQ, firstTryNoHint: false }),
+      ),
     });
-    const uncapped = n * hintsPerQ * HINT_PENALTY_PER_VIEW;
-    expect(uncapped).toBeGreaterThan(0.25);
-    expect(out.hintPenalty).toBe(0.25);
-    expect(out.effectiveAccuracy).toBeCloseTo(1 * (1 - 0.25), 5);
+    const totalHints = n * hintsPerQ;
+    expect(out.totalHintsUsed).toBe(totalHints);
+    expect(out.hintPenalty).toBe(Math.min(HINT_PENALTY_CAP, totalHints * 0.03));
+    expect(out.effectiveAccuracy).toBe(Math.max(0, 1 - totalHints * 0.03));
+    expect(out.passed).toBe(true);
   });
 
-  it("fails when raw meets threshold but effective does not (hint penalty caps score)", () => {
+  it("fails when raw, no-hint rate, and effective all miss thresholds", () => {
     const out = computePracticeOutcome({
       questions: [
-        { firstTryCorrect: true, hintEvents: 13 },
-        { firstTryCorrect: true, hintEvents: 13 },
-        { firstTryCorrect: true, hintEvents: 13 },
-        { firstTryCorrect: true, hintEvents: 13 },
-        { firstTryCorrect: false, hintEvents: 0 },
+        q({ firstTryCorrect: true, hintEvents: 10, firstTryNoHint: false }),
+        q({ firstTryCorrect: true, hintEvents: 10, firstTryNoHint: false }),
+        q({ firstTryCorrect: true, hintEvents: 10, firstTryNoHint: false }),
+        q({ firstTryCorrect: false, hintEvents: 0, firstTryNoHint: false }),
+        q({ firstTryCorrect: false, hintEvents: 0, firstTryNoHint: false }),
       ],
     });
-    expect(out.rawCorrectRate).toBeGreaterThanOrEqual(PASS_MIN_RAW_RATE);
-    expect(out.hintPenalty).toBe(0.25);
-    expect(out.effectiveAccuracy).toBeCloseTo(0.8 * (1 - 0.25), 5);
-    expect(out.effectiveAccuracy).toBeLessThan(PASS_MIN_EFFECTIVE);
+    expect(out.rawCorrectRate).toBe(0.6);
+    expect(out.noHintCorrectRate).toBe(0);
+    expect(out.effectiveAccuracy).toBe(Math.max(0, 0.6 - 30 * 0.03));
     expect(out.passed).toBe(false);
+  });
+
+  it("passes via no-hint first-try rate ≥ 0.5 when raw is only 0.5", () => {
+    const out = computePracticeOutcome({
+      questions: [
+        q({ firstTryCorrect: true, hintEvents: 0, firstTryNoHint: true }),
+        q({ firstTryCorrect: true, hintEvents: 0, firstTryNoHint: true }),
+        q({ firstTryCorrect: false, hintEvents: 0, firstTryNoHint: false }),
+        q({ firstTryCorrect: false, hintEvents: 0, firstTryNoHint: false }),
+      ],
+    });
+    expect(out.rawCorrectRate).toBe(0.5);
+    expect(out.noHintCorrectRate).toBe(0.5);
+    expect(out.passed).toBe(true);
   });
 
   it("returns zeros and not passed for empty session", () => {

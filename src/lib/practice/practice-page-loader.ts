@@ -9,11 +9,13 @@ import {
   type ItemHesitationResult,
 } from "@/lib/analytics/hesitation";
 import { getOrCreateDevUser } from "@/lib/dev-user";
-import { generateAdaptiveHint } from "@/lib/llm/adaptive-hint";
+import type { PracticeRuntimeMeta } from "@/lib/practice/practice-runtime-types";
+import { buildResolvedPracticeHints } from "@/lib/practice/get-question-hints";
 import {
   computePracticeOutcome,
   outcomesFromItemStates,
 } from "@/lib/practice/practice-result-rules";
+import { parsePracticeRuntimeFromRevisitMeta } from "@/lib/practice/practice-session-runtime";
 import { parsePracticeItemState } from "@/lib/practice/practice-state";
 import { prisma } from "@/lib/prisma";
 import { findActiveSessionResumeCandidate } from "@/lib/session-resume";
@@ -44,6 +46,7 @@ export type PracticeQuestionPayload = {
 export type PracticeCompletedSummary = {
   rawCorrectRate: number;
   effectiveAccuracy: number;
+  noHintCorrectRate: number;
   totalHintsUsed: number;
   hintPenalty: number;
   passed: boolean;
@@ -73,6 +76,7 @@ export type PracticePageView =
       questions: PracticeQuestionPayload[];
       currentPosition: number;
       itemStatesJson: unknown[];
+      practiceRuntime: PracticeRuntimeMeta | null;
       completedSummary?: PracticeCompletedSummary;
       nextStep?: CompletionNextStep;
     };
@@ -138,7 +142,7 @@ export async function getPracticePageView(params: {
   const questions: PracticeQuestionPayload[] = session.items.map((it) => {
     const st = parsePracticeItemState(it.practiceStateJson);
     const q = it.question;
-    const src = {
+    const resolved = buildResolvedPracticeHints({
       questionText: q.questionText,
       optionA: q.optionA,
       optionB: q.optionB,
@@ -147,8 +151,14 @@ export async function getPracticePageView(params: {
       correctAnswer: q.correctAnswer,
       explanation: q.explanation,
       notes: q.notes,
-    };
-    const adaptive = generateAdaptiveHint(src);
+      hint1: q.hint1,
+      hint2: q.hint2,
+      hint3: q.hint3,
+      coreRule: q.coreRule,
+      recognitionSignal: q.recognitionSignal,
+    });
+    const bankHintLayers =
+      Boolean(q.hint1?.trim()) || Boolean(q.hint2?.trim()) || Boolean(q.hint3?.trim());
     const prediction = buildPracticePredictionPayload({
       questionText: q.questionText,
       skillKey: q.skillKey,
@@ -167,11 +177,11 @@ export async function getPracticePageView(params: {
       optionC: q.optionC,
       optionD: q.optionD,
       hints: {
-        level1: adaptive.hint1,
-        level2: adaptive.hint2,
-        level3: adaptive.hint3,
-        qaPassed: adaptive.qaPassed,
-        fallbackUsed: adaptive.fallbackUsed,
+        level1: resolved.level1,
+        level2: resolved.level2,
+        level3: resolved.level3,
+        qaPassed: true,
+        fallbackUsed: !bankHintLayers,
       },
       explanation: q.explanation,
       correctAnswer: q.correctAnswer,
@@ -204,6 +214,7 @@ export async function getPracticePageView(params: {
   }
 
   const itemStatesJson = session.items.map((it) => it.practiceStateJson);
+  const practiceRuntime = parsePracticeRuntimeFromRevisitMeta(session.revisitMetaJson);
 
   return {
     kind: "session",
@@ -214,6 +225,7 @@ export async function getPracticePageView(params: {
     questions,
     currentPosition,
     itemStatesJson,
+    practiceRuntime,
     completedSummary,
     nextStep,
   };

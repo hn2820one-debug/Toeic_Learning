@@ -57,30 +57,31 @@ enum LearningSessionStatus {
 //  USERS & ACCESS (multi-tenant foundation — no OAuth in this repo yet)
 // ─────────────────────────────────────────────
 model User {
-  id        Int      @id @default(autoincrement())
+  id                   Int      @id @default(autoincrement())
   /// Short handle; prefer UserProfile.displayName when set.
-  name      String   @default("Keith")
+  name                 String   @default("Keith")
   /// Nullable until the learner links an email (hosted / auth phase).
-  email     String?  @unique
+  email                String?  @unique
   /// Reserved for future SSO (e.g. google, supabase). Not wired to any SDK in this repo.
   externalAuthProvider String?
   /// External subject id from the provider; use with externalAuthProvider.
   externalUserId       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   profile       UserProfile?
   enrollments   Enrollment[]
   preferences   UserPreference[]
   studySessions StudySession[]
 
-  programProgressRows  ProgramProgress[]
-  moduleProgressRows   ModuleProgress[]
-  topicProgressRows    UserTopicProgress[]
-  learningLoopSessions LearningSession[]
-  studyTasks           StudyTask[]
-  checkpointAttempts   CheckpointAttempt[]
+  programProgressRows       ProgramProgress[]
+  moduleProgressRows        ModuleProgress[]
+  topicProgressRows         UserTopicProgress[]
+  learningLoopSessions      LearningSession[]
+  studyTasks                StudyTask[]
+  checkpointAttempts        CheckpointAttempt[]
   listeningWorkbookProgress UserListeningWorkbookProgress[]
+  studyPlans                StudyPlan[]
 
   @@unique([externalAuthProvider, externalUserId])
   @@map("users")
@@ -104,13 +105,13 @@ model UserProfile {
 
 /// Program enrollment (programKey aligns with file-based curriculum, e.g. phase1).
 model Enrollment {
-  id          String   @id @default(cuid())
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  programKey  String
-  status      String   @default("active")
-  enrolledAt  DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey String
+  status     String   @default("active")
+  enrolledAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([userId, programKey])
   @@index([programKey])
@@ -137,9 +138,9 @@ model UserPreference {
 
 /// Canonical topic row — topicKey matches Phase1TopicKey (e.g. office, finance).
 model LearningTopic {
-  topicKey   String @id
+  topicKey   String  @id
   /// Sort order for planners; when null in app logic, fall back to `PHASE1_TOPIC_KEYS_IN_ORDER` in content.
-  orderIndex Int    @default(0)
+  orderIndex Int     @default(0)
   labelZh    String?
   labelEn    String?
 
@@ -151,17 +152,17 @@ model LearningTopic {
 
 /// Lesson slice within a module; moduleKey + lessonIndex align with src/content/programs/phase1/modules.ts outlines.
 model Lesson {
-  id          String @id @default(cuid())
-  moduleKey   String
-  lessonIndex Int
-  titleZh     String
-  titleEn     String
+  id           String   @id @default(cuid())
+  moduleKey    String
+  lessonIndex  Int
+  titleZh      String
+  titleEn      String
   /// Phase1 topic key when this row is a topic-scoped capsule (content factory). Multiple rows per topic use distinct `lessonIndex`.
-  topicKey    String?
+  topicKey     String?
   /// Traditional-Chinese Markdown body (fixed section headings). Filled by admin LLM pipeline, not by learner requests.
   bodyMarkdown String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   lessonPracticeItems LessonPracticeItem[]
   learningSessions    LearningSession[]
@@ -190,32 +191,32 @@ model LessonPracticeItem {
 
 /// Per-user progress for a canonical topic (FSRS/Elo stay global until scoped per user in a later migration).
 model UserTopicProgress {
-  id        String @id @default(cuid())
-  userId    Int
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topicKey  String
-  topic     LearningTopic @relation(fields: [topicKey], references: [topicKey], onDelete: Cascade)
-  stage     TopicProgressStage @default(New)
-  attempts  Int    @default(0)
-  correct   Int    @default(0)
+  id                         String             @id @default(cuid())
+  userId                     Int
+  user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicKey                   String
+  topic                      LearningTopic      @relation(fields: [topicKey], references: [topicKey], onDelete: Cascade)
+  stage                      TopicProgressStage @default(New)
+  attempts                   Int                @default(0)
+  correct                    Int                @default(0)
   /// LEARN phase: { "seen": number[], "understood": number[], "reexplain": Record<lessonId, number> } — indices are 0-based order within topic lessons.
-  learnProgressJson Json?
-  learnCompletedAt  DateTime?
+  learnProgressJson          Json?
+  learnCompletedAt           DateTime?
   /// Last time a scaffolded practice run **passed** (effective rule).
-  practicePassedAt   DateTime?
+  practicePassedAt           DateTime?
   /// `effectiveAccuracy` from the last **passed** practice run.
-  practiceAccuracy   Float?
+  practiceAccuracy           Float?
   /// Incremented each time a practice run **passes** (closed-loop counter).
-  practicePassCount  Int      @default(0)
+  practicePassCount          Int                @default(0)
   /// Last time a timed checkpoint **passed** (topic test).
-  testPassedAt  DateTime?
+  testPassedAt               DateTime?
   /// `overallAccuracy` from the last **passed** checkpoint run.
-  testAccuracy    Float?
+  testAccuracy               Float?
   /// Incremented each time a checkpoint run **finishes** (pass or fail).
-  testAttempts    Int      @default(0)
+  testAttempts               Int                @default(0)
   /// Queued bank question ids for the next PRACTICE (deferred in-session revisits) — JSON number[]
   practiceReinforceQueueJson Json?
-  updatedAt DateTime @updatedAt
+  updatedAt                  DateTime           @updatedAt
 
   @@unique([userId, topicKey])
   @@index([userId])
@@ -224,16 +225,16 @@ model UserTopicProgress {
 
 /// Per-user module progress — moduleKey matches Phase1ModuleKey.
 model ModuleProgress {
-  id                   String   @id @default(cuid())
-  userId               Int
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  moduleKey            String
-  status               String   @default("not_started")
-  diagnosticAccuracy   Float?
-  checkpointAccuracy   Float?
-  lastStartedAt        DateTime?
-  lastCompletedAt      DateTime?
-  updatedAt            DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  userId             Int
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleKey          String
+  status             String    @default("not_started")
+  diagnosticAccuracy Float?
+  checkpointAccuracy Float?
+  lastStartedAt      DateTime?
+  lastCompletedAt    DateTime?
+  updatedAt          DateTime  @updatedAt
 
   @@unique([userId, moduleKey])
   @@index([moduleKey])
@@ -242,14 +243,14 @@ model ModuleProgress {
 
 /// Coarse program pointer (one row per user + programKey).
 model ProgramProgress {
-  id                       String   @id @default(cuid())
-  userId                   Int
-  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  programKey               String
-  activeModuleKey          String?
-  phaseStatus              String?
+  id                        String   @id @default(cuid())
+  userId                    Int
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey                String
+  activeModuleKey           String?
+  phaseStatus               String?
   lastRecommendedActionJson String?
-  updatedAt                DateTime @updatedAt
+  updatedAt                 DateTime @updatedAt
 
   @@unique([userId, programKey])
   @@index([programKey])
@@ -258,27 +259,27 @@ model ProgramProgress {
 
 /// Formal closed-loop session — links to legacy StudySession when a trainer run exists (AnswerHistory / FSRS stay on StudySession).
 model LearningSession {
-  id              String               @id @default(cuid())
+  id              String                @id @default(cuid())
   userId          Int
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  programKey      String               @default("phase1")
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey      String                @default("phase1")
   moduleKey       String?
   /// Phase1 topic key for practice/test flows (optional).
   topicKey        String?
   lessonId        String?
-  lesson          Lesson?              @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lesson          Lesson?               @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   mode            LearningSessionMode
   status          LearningSessionStatus @default(active)
   /// When set, the legacy trainer run that recorded answers / FSRS / ELO side effects.
-  studySessionId  Int?                 @unique
-  studySession    StudySession?        @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
-  startedAt       DateTime             @default(now())
+  studySessionId  Int?                  @unique
+  studySession    StudySession?         @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+  startedAt       DateTime              @default(now())
   endedAt         DateTime?
   abandonedAt     DateTime?
   /// PRACTICE in-session revisit planner — see `src/lib/session/revisit-planner.ts`
   revisitMetaJson Json?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   items              LearningSessionItem[]
   checkpointAttempts CheckpointAttempt[]
@@ -313,19 +314,19 @@ model LearningSessionItem {
 
 /// Deterministic checkpoint outcome (not LLM-owned).
 model CheckpointAttempt {
-  id                String   @id @default(cuid())
+  id                String           @id @default(cuid())
   userId            Int
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   moduleKey         String
   learningSessionId String?
   learningSession   LearningSession? @relation(fields: [learningSessionId], references: [id], onDelete: SetNull)
   studySessionId    Int?
-  studySession      StudySession? @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+  studySession      StudySession?    @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
   accuracy          Float?
   passThreshold     Float
   passed            Boolean
   summarySnapshot   String?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime         @default(now())
 
   @@index([userId])
   @@index([moduleKey])
@@ -334,21 +335,21 @@ model CheckpointAttempt {
 
 /// Thin task queue for planners — taskType aligns with Phase1SessionMode strings in src/content/programs/phase1/types.ts
 model StudyTask {
-  id                 String   @id @default(cuid())
-  userId             Int
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  programKey         String
-  moduleKey          String?
-  taskType           String
-  status             String   @default("pending")
-  scheduledFor       DateTime?
-  studySessionId     Int?
-  studySession       StudySession? @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
-  learningSessionId  String?
-  learningSession    LearningSession? @relation(fields: [learningSessionId], references: [id], onDelete: SetNull)
-  skillKeysJson      String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String           @id @default(cuid())
+  userId            Int
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programKey        String
+  moduleKey         String?
+  taskType          String
+  status            String           @default("pending")
+  scheduledFor      DateTime?
+  studySessionId    Int?
+  studySession      StudySession?    @relation(fields: [studySessionId], references: [id], onDelete: SetNull)
+  learningSessionId String?
+  learningSession   LearningSession? @relation(fields: [learningSessionId], references: [id], onDelete: SetNull)
+  skillKeysJson     String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([userId, status])
   @@index([programKey])
@@ -360,26 +361,26 @@ model StudyTask {
 //  Core knowledge atoms: word / phrase / false_friend
 // ─────────────────────────────────────────────
 model LearningItem {
-  id             Int      @id @default(autoincrement())
-  itemType       String   // word | phrase | false_friend
-  term           String
-  meaning        String?
-  confusionWord  String?  // false_friend: the word it gets confused with
+  id               Int     @id @default(autoincrement())
+  itemType         String // word | phrase | false_friend
+  term             String
+  meaning          String?
+  confusionWord    String? // false_friend: the word it gets confused with
   confusionMeaning String? // false_friend: confusion word's meaning
-  exampleEn      String?
-  exampleZh      String?
-  topic          String?
-  level          String?  // A | B | C
-  source         String?  // e.g. "checkpoint-1-100"
-  originalResult String?  // 會 | 不會 — initial baseline only
-  isValid        Boolean  @default(true)
+  exampleEn        String?
+  exampleZh        String?
+  topic            String?
+  level            String? // A | B | C
+  source           String? // e.g. "checkpoint-1-100"
+  originalResult   String? // 會 | 不會 — initial baseline only
+  isValid          Boolean @default(true)
 
   // Dynamic mastery (replaces original result as truth)
-  masteryScore    Float   @default(0.0)
-  reviewCount     Int     @default(0)
-  consecutiveOk   Int     @default(0)
-  nextReview      DateTime?
-  intervalDays    Int     @default(1)
+  masteryScore  Float     @default(0.0)
+  reviewCount   Int       @default(0)
+  consecutiveOk Int       @default(0)
+  nextReview    DateTime?
+  intervalDays  Int       @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -399,18 +400,18 @@ model QuestionItem {
   learningItemId Int?
   learningItem   LearningItem? @relation(fields: [learningItemId], references: [id])
 
-  questionType   String  // vocab|phrase|false_friend|part5|part6|part7|part2|part3|part4
-  promptText     String
-  optionA        String?
-  optionB        String?
-  optionC        String?
-  optionD        String?
-  correctAnswer  String  // A | B | C | D | text
-  explanation    String?
-  topic          String?
-  level          String?  // A | B | C
-  isActive       Boolean @default(true)
-  source         String?
+  questionType  String // vocab|phrase|false_friend|part5|part6|part7|part2|part3|part4
+  promptText    String
+  optionA       String?
+  optionB       String?
+  optionC       String?
+  optionD       String?
+  correctAnswer String // A | B | C | D | text
+  explanation   String?
+  topic         String?
+  level         String? // A | B | C
+  isActive      Boolean @default(true)
+  source        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -422,39 +423,75 @@ model QuestionItem {
 }
 
 model QuestionBankItem {
-  id            Int      @id @default(autoincrement())
-  questionText  String   @unique
-  optionA       String
-  optionB       String
-  optionC       String
-  optionD       String
-  correctAnswer String
-  explanation   String?
-  notes         String?
+  id                           Int            @id @default(autoincrement())
+  questionText                 String         @unique
+  optionA                      String
+  optionB                      String
+  optionC                      String
+  optionD                      String
+  correctAnswer                String
+  explanation                  String?
+  notes                        String?
   /// Canonical Phase1 skill id (e.g. vocabulary.document-workflow). See docs/taxonomy-fields.md
-  skillKey      String?
+  skillKey                     String?
   /// Canonical Phase1 topic bucket (e.g. office). Distinct from display `topic` until backfill.
-  topicKey      String?
+  topicKey                     String?
   /// Target module id when aligned to curriculum (e.g. phase1-document-workflow).
-  moduleKey     String?
+  moduleKey                    String?
   /// Provenance: seed | import_json | import_csv | manual | llm | reviewed | unknown
-  sourceQuality String?
+  sourceQuality                String?
   /// Cold-start / seeding: user-known vs unknown; also used by FSRS seed scripts.
-  priorKnown    Boolean?
-  topic         String
-  difficulty    String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  priorKnown                   Boolean?
+  topic                        String
+  difficulty                   String
+  /// TOEIC part (1-7). 5 = Incomplete Sentences (default), 6 = Text Completion, 7 = Reading Comprehension.
+  part                         Int            @default(5)
+  /// Fine-grained LearningSkill.skillCode this question primarily tests (e.g. "grammar_svc", "vocab_medical"). Additive to existing coarse `skillKey`.
+  primaryLearningSkillCode     String?
+  primaryLearningSkill         LearningSkill? @relation("PrimarySkillQuestions", fields: [primaryLearningSkillCode], references: [skillCode], onDelete: SetNull)
+  /// JSON array of additional LearningSkill.skillCode also tested in this item — see docs/reconciled-taxonomy.md
+  additionalLearningSkillsJson Json?
+  /// One-sentence canonical rule shown at LEARN / feedback time.
+  coreRule                     String?
+  /// Short "識別信號" — how to detect this question belongs to this skill in <5 sec.
+  recognitionSignal            String?
+  /// Three-tier hint ladder (set by hint-builder / LLM pipeline at generation time).
+  hint1                        String?
+  hint2                        String?
+  hint3                        String?
+  /// Per-choice distractor taxonomy — JSON: {A:{type,whyPlausible,whyWrong}, B:{}, C:{}, D:{}}. See docs/teaching-quality-spec.md.
+  distractorAnalysisJson       Json?
+  /// "formal" | "semi_formal" | "casual"
+  registerLevel                String?
+  /// Optional industry flavor for FSE examples etc: "semiconductor" | "medical" | "generic".
+  industryFocus                String?
+  /// When part 6/7, which Passage this question belongs to.
+  passageId                    String?
+  passage                      Passage?       @relation(fields: [passageId], references: [id], onDelete: SetNull)
+  /// 1-based position inside the passage (order of the blank / question).
+  positionInPassage            Int?
+  /// LLM provenance (matches LlmUsageLog.model) when sourceQuality = "llm" or "reviewed".
+  generatedBy                  String?
+  verifiedBy                   String?
+  verifiedAt                   DateTime?
 
-  answerHistory AnswerHistory[]
-  fsrsCardState FsrsCardState?
-  reviewLogs    ReviewLog[]
-  studySessionItems StudySessionQuestion[]
-  lessonPracticeItems LessonPracticeItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answerHistory        AnswerHistory[]
+  fsrsCardState        FsrsCardState?
+  reviewLogs           ReviewLog[]
+  studySessionItems    StudySessionQuestion[]
+  lessonPracticeItems  LessonPracticeItem[]
   learningSessionItems LearningSessionItem[]
+  variantOriginLinks   QuestionVariant[]      @relation("VariantOriginal")
+  variantTargetLinks   QuestionVariant[]      @relation("VariantTarget")
 
   @@index([topic])
   @@index([difficulty])
+  @@index([part])
+  @@index([primaryLearningSkillCode])
+  @@index([passageId, positionInPassage])
   @@map("questions")
 }
 
@@ -558,23 +595,23 @@ model TopicMastery {
 }
 
 model StudySession {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   /// Set when the runtime knows the acting user (dev bootstrap or future auth). Legacy rows may be null.
   userId         Int?
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   startedAt      DateTime
   endedAt        DateTime?
   abandonedAt    DateTime?
-  totalQuestions Int      @default(0)
-  correctCount   Int      @default(0)
-  mode           String   @default("quick")
-  targetCount    Int      @default(10)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  totalQuestions Int       @default(0)
+  correctCount   Int       @default(0)
+  mode           String    @default("quick")
+  targetCount    Int       @default(10)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  answerHistory AnswerHistory[]
-  items         StudySessionQuestion[]
-  closedLoopSession LearningSession?
+  answerHistory      AnswerHistory[]
+  items              StudySessionQuestion[]
+  closedLoopSession  LearningSession?
   checkpointAttempts CheckpointAttempt[]
   studyTasks         StudyTask[]
 
@@ -602,20 +639,20 @@ model StudySessionQuestion {
 }
 
 model AnswerHistory {
-  id             Int              @id @default(autoincrement())
-  sessionId      Int
-  session        StudySession     @relation(fields: [sessionId], references: [id])
-  questionId     Int
-  question       QuestionBankItem @relation(fields: [questionId], references: [id])
-  selectedAnswer String
-  isCorrect      Boolean
-  answeredAt     DateTime         @default(now())
+  id                    Int              @id @default(autoincrement())
+  sessionId             Int
+  session               StudySession     @relation(fields: [sessionId], references: [id])
+  questionId            Int
+  question              QuestionBankItem @relation(fields: [questionId], references: [id])
+  selectedAnswer        String
+  isCorrect             Boolean
+  answeredAt            DateTime         @default(now())
   /// Question stem as shown when answered (same semantic as questionText snapshot).
-  stemSnapshot          String   @default("")
-  choicesSnapshot       String   @default("{}")
-  correctAnswerSnapshot String   @default("")
-  topicSnapshot         String   @default("")
-  difficultySnapshot    String   @default("")
+  stemSnapshot          String           @default("")
+  choicesSnapshot       String           @default("{}")
+  correctAnswerSnapshot String           @default("")
+  topicSnapshot         String           @default("")
+  difficultySnapshot    String           @default("")
   optionASnapshot       String?
   optionBSnapshot       String?
   optionCSnapshot       String?
@@ -625,9 +662,9 @@ model AnswerHistory {
   topicKeySnapshot      String?
   moduleKeySnapshot     String?
 
+  @@unique([sessionId, questionId])
   @@index([sessionId])
   @@index([questionId])
-  @@unique([sessionId, questionId])
   @@map("answer_history")
 }
 
@@ -638,7 +675,7 @@ model ListeningSetLegacy {
   id         Int      @id @default(autoincrement())
   title      String
   sourceUrl  String?
-  part       Int      // 2 | 3 | 4
+  part       Int // 2 | 3 | 4
   transcript String?
   note       String?
   isActive   Boolean  @default(true)
@@ -698,16 +735,16 @@ model ListeningQuestionV2 {
 //  DAILY SESSIONS
 // ─────────────────────────────────────────────
 model DailySession {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   sessionDate    DateTime // date only (stored as datetime, compare by date)
-  dayType        Int      // 1 | 2 | 3 | 4
-  status         String   @default("pending") // pending | in_progress | completed
-  totalQuestions Int      @default(0)
-  correctCount   Int      @default(0)
-  durationMin    Int      @default(45)
+  dayType        Int // 1 | 2 | 3 | 4
+  status         String    @default("pending") // pending | in_progress | completed
+  totalQuestions Int       @default(0)
+  correctCount   Int       @default(0)
+  durationMin    Int       @default(45)
   startedAt      DateTime?
   completedAt    DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   answers SessionAnswer[]
 
@@ -725,7 +762,7 @@ model SessionAnswer {
   questionItem   QuestionItem @relation(fields: [questionItemId], references: [id])
   userAnswer     String?
   isCorrect      Boolean
-  errorType      String?      // V|FF|G|S|C|LK|IN|DS|SP|VN
+  errorType      String? // V|FF|G|S|C|LK|IN|DS|SP|VN
   timeSpentSec   Int?
   createdAt      DateTime     @default(now())
 
@@ -745,7 +782,7 @@ model ReviewQueue {
   intervalDays   Int           @default(1)
   easeFactor     Float         @default(2.5)
   wrongCount     Int           @default(0)
-  lastResult     String?       // correct | wrong
+  lastResult     String? // correct | wrong
   active         Boolean       @default(true)
   updatedAt      DateTime      @updatedAt
 
@@ -778,8 +815,8 @@ model WeeklyReport {
   totalAccuracy     Float?
   readingAccuracy   Float?
   listeningAccuracy Float?
-  weakestTopics     String?  // JSON array string
-  weakestErrorTypes String?  // JSON array string
+  weakestTopics     String? // JSON array string
+  weakestErrorTypes String? // JSON array string
   nextWeekFocus     String?
   programPhase      Int      @default(1)
   createdAt         DateTime @default(now())
@@ -833,21 +870,168 @@ model ListeningWorkbook {
 }
 
 model UserListeningWorkbookProgress {
-  id                         String            @id @default(cuid())
-  userId                     Int
-  user                       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workbookId                 String
-  workbook                   ListeningWorkbook @relation(fields: [workbookId], references: [id], onDelete: Cascade)
-  round1AnswersJson          Json?
-  round2AnswersJson          Json?
-  dictationAnswersJson       Json?
-  shadowingCheckedJson       Json?
-  takeawayUser               String?
-  tomorrowReviewPointsJson   Json?
-  lastStepSeen               Int               @default(1)
-  updatedAt                  DateTime          @updatedAt
+  id                       String            @id @default(cuid())
+  userId                   Int
+  user                     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workbookId               String
+  workbook                 ListeningWorkbook @relation(fields: [workbookId], references: [id], onDelete: Cascade)
+  round1AnswersJson        Json?
+  round2AnswersJson        Json?
+  dictationAnswersJson     Json?
+  shadowingCheckedJson     Json?
+  takeawayUser             String?
+  tomorrowReviewPointsJson Json?
+  lastStepSeen             Int               @default(1)
+  updatedAt                DateTime          @updatedAt
 
   @@unique([userId, workbookId])
   @@index([userId])
   @@map("user_listening_workbook_progress")
+}
+
+// ─────────────────────────────────────────────
+//  30-DAY CLOSED-LOOP PLAN (Reconciled v2)
+//  Orthogonal to LearningTopic (12 Phase1 scenarios) — these 58 rows are
+//  fine-grained skill / vocab / strategy points used by StudyPlan sequencing.
+//  See docs/reconciled-taxonomy.md for the scenario × skill design.
+// ─────────────────────────────────────────────
+
+/// Fine-grained skill taxonomy (58 rows). `skillCode` e.g. "grammar_svc", "vocab_medical", "strat_p5_timing".
+/// `parentSkillKey` loosely maps to the coarse Phase1SkillDefinition.skillKey constants in src/content/programs/phase1/skill-map.ts (not enforced by FK because that is a content-file taxonomy).
+model LearningSkill {
+  skillCode        String   @id
+  /// "grammar" | "vocabulary" | "phrase" | "strategy"
+  category         String
+  /// e.g. "sentence_pattern", "verbal_form", "clause", "tense", "noun_related", "workplace", "reading_skill", "exam_technique"
+  subCategory      String?
+  labelZh          String
+  labelEn          String
+  /// "P1" | "P2" | "P3" | "P4" — matches the priority tier in the 30-day plan
+  priority         String   @default("P3")
+  /// "beginner" | "intermediate" | "advanced"
+  difficultyBand   String   @default("intermediate")
+  /// Rough TOEIC score band this skill matters at: "400-550" | "500-700" | "700-850" | "850+"
+  toeicScoreBand   String   @default("500-700")
+  /// 0-5 — how frequently this skill shows up in Part 5 in real TOEIC.
+  part5Frequency   Int      @default(0)
+  part6Frequency   Int      @default(0)
+  part7Frequency   Int      @default(0)
+  /// Loose mapping up to existing PHASE1_SKILLS (e.g. "grammar.verb-control"). Null means not yet linked.
+  parentSkillKey   String?
+  /// 1-4 for items covered in the 30-day plan; 5+ for Week 5 / future; null = unscheduled.
+  recommendedWeek  Int?
+  within30DayPlan  Boolean  @default(false)
+  /// JSON array of other LearningSkill.skillCode values that should be learned first.
+  learnPrereqJson  Json?
+  /// JSON array of LearningSkill.skillCode values unlocked after mastering this one.
+  learnUnlocksJson Json?
+  orderIndex       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  questionsPrimary QuestionBankItem[] @relation("PrimarySkillQuestions")
+
+  @@index([category])
+  @@index([priority])
+  @@index([recommendedWeek])
+  @@index([within30DayPlan])
+  @@map("learning_skills")
+}
+
+/// Part 6 / Part 7 passage. Each Passage has 1..N QuestionBankItem rows ordered by positionInPassage.
+model Passage {
+  id               String   @id @default(cuid())
+  /// 6 or 7
+  part             Int
+  /// "email" | "notice" | "article" | "memo" | "double_passage" | "triple_passage" | "advertisement" | "form"
+  passageType      String
+  title            String?
+  bodyText         String
+  wordCount        Int      @default(0)
+  /// Optional Phase1TopicKey for scenario classification (e.g. "office", "finance"). String not FK because Phase1TopicKey is a content-file enum.
+  scenarioTopicKey String?
+  /// A | B | C | D matching QuestionBankItem.difficulty conventions
+  difficulty       String   @default("B")
+  /// Provenance: seed | import_json | import_csv | manual | llm | reviewed
+  sourceQuality    String?  @default("seed")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  questions QuestionBankItem[]
+
+  @@index([part])
+  @@index([scenarioTopicKey])
+  @@map("passages")
+}
+
+/// Link between an original question and a "same skill, different surface" variant (which is itself a full QuestionBankItem row).
+/// Used by revisit-planner and "answered wrong → do a variant" flows.
+model QuestionVariant {
+  id                 String           @id @default(cuid())
+  originalQuestionId Int
+  original           QuestionBankItem @relation("VariantOriginal", fields: [originalQuestionId], references: [id], onDelete: Cascade)
+  variantQuestionId  Int              @unique
+  variant            QuestionBankItem @relation("VariantTarget", fields: [variantQuestionId], references: [id], onDelete: Cascade)
+  /// "vocabulary_swap" | "scenario_change" | "difficulty_adjust" | "distractor_rotate"
+  variantType        String
+  notes              String?
+  createdAt          DateTime         @default(now())
+
+  @@index([originalQuestionId])
+  @@map("question_variants")
+}
+
+/// Personalized 30-day study plan. One active plan per user at a time (soft rule — no DB unique).
+model StudyPlan {
+  id                  String    @id @default(cuid())
+  userId              Int
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String    @default("30-Day Closed-Loop Plan")
+  durationDays        Int       @default(30)
+  /// Calendar date for Day 1 (local to the user's timezone). Null until the learner actually starts.
+  startDate           DateTime?
+  targetScore         Int?
+  baselineScore       Int?
+  finalScore          Int?
+  /// JSON array of LearningSkill.skillCode values planned across all days.
+  plannedSkillsJson   Json
+  /// JSON array of LearningSkill.skillCode values the learner has already mastered ("Tested" or better) under this plan.
+  completedSkillsJson Json?
+  /// "active" | "completed" | "abandoned" | "paused"
+  status              String    @default("active")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  dailyItems DailyPlanItem[]
+
+  @@index([userId, status])
+  @@map("study_plans")
+}
+
+/// One row per day in a StudyPlan (typically 30 rows). activitiesJson holds the ordered 45-min session breakdown.
+model DailyPlanItem {
+  id               String    @id @default(cuid())
+  studyPlanId      String
+  studyPlan        StudyPlan @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
+  /// 1-based day number within the plan (1..durationDays)
+  dayNumber        Int
+  /// "A" | "B" | "C" | "D" | "special" — matches the 30-day plan rotation
+  dayType          String
+  /// Main LearningSkill.skillCode target for the day (null for diagnostic / mock / multi-skill days)
+  primarySkillCode String?
+  /// JSON array: [{type:"warmup"|"review"|"learn"|"practice"|"test"|"mixed_reading"|"mixed_mock"|"reflect", skillCode?, minutes:number, notes?}]
+  activitiesJson   Json
+  /// Optional planned calendar date (set when user starts the plan)
+  plannedDate      DateTime?
+  completed        Boolean   @default(false)
+  completedAt      DateTime?
+  /// Self-reported 1-5 cognitive load at session end.
+  cognitiveLoad    Int?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([studyPlanId, dayNumber])
+  @@index([studyPlanId, completed])
+  @@map("daily_plan_items")
 }

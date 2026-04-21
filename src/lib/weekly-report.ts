@@ -28,7 +28,7 @@ export async function getDeterministicWeeklyReport(): Promise<DeterministicWeekl
     : "尚無明確 ROI topic（資料不足）";
 
   const nextAction = weekly.nextActions.primaryTask
-    ? `${weekly.nextActions.primaryTask.type.toUpperCase()} · ${weekly.nextActions.primaryTask.reasonZh}`
+    ? `${weekly.nextActions.primaryTask.type.toUpperCase()} · ${weekly.nextActions.primaryTask.reason}`
     : "先完成一個學習任務以累積可分析資料。";
 
   return {

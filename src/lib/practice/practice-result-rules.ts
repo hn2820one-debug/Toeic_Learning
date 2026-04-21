@@ -1,38 +1,32 @@
 /**
  * Pure scoring for scaffolded PRACTICE — not used for ELO / FSRS.
+ * Pass rule (v2): raw ≥ 0.7 OR no-hint first-try rate ≥ 0.5 OR effectiveAccuracy ≥ 0.65,
+ * where effectiveAccuracy = max(0, rawCorrectRate − totalHints×0.03) at session level.
  */
 
-export type PracticeQuestionOutcome = {
-  /** First-try correct per question (best 1 if multiple attempts). */
-  firstTryCorrect: boolean;
-  /** Number of hint-layer views (each layer click counts once). */
-  hintEvents: number;
-};
+import { computePracticeOutcomeV2 } from "./evaluate-practice-result";
+import type { PracticeQuestionOutcome } from "./practice-outcome-types";
+
+export type { PracticeQuestionOutcome };
 
 export type PracticeSessionSummaryInput = {
   questions: PracticeQuestionOutcome[];
 };
 
-/** Penalty weight per hint view (tunable). */
+/** @deprecated Legacy constant — kept for tests referencing old cap heuristic. */
 export const HINT_PENALTY_PER_VIEW = 0.02;
 export const HINT_PENALTY_CAP = 0.25;
 
-/** Pass thresholds (tunable). */
+/** @deprecated Old pass gate — use returned `passed` from computePracticeOutcome. */
 export const PASS_MIN_RAW_RATE = 0.6;
 export const PASS_MIN_EFFECTIVE = 0.65;
 
-/**
- * - rawCorrectRate: share of questions solved on **first submit** (first try).
- * - totalHintsUsed: sum of hint view events.
- * - hintPenalty: capped sum of per-view penalties applied to effective score.
- * - effectiveAccuracy: rawCorrectRate * (1 - hintPenalty) after cap (documented heuristic).
- * - passed: both raw and effective meet minimums.
- */
 export function computePracticeOutcome(input: PracticeSessionSummaryInput): {
   rawCorrectRate: number;
   totalHintsUsed: number;
   hintPenalty: number;
   effectiveAccuracy: number;
+  noHintCorrectRate: number;
   passed: boolean;
 } {
   const n = input.questions.length;
@@ -42,42 +36,41 @@ export function computePracticeOutcome(input: PracticeSessionSummaryInput): {
       totalHintsUsed: 0,
       hintPenalty: 0,
       effectiveAccuracy: 0,
+      noHintCorrectRate: 0,
       passed: false,
     };
   }
 
-  const firstOk = input.questions.filter((q) => q.firstTryCorrect).length;
-  const rawCorrectRate = firstOk / n;
-
-  const totalHintsUsed = input.questions.reduce((a, q) => a + q.hintEvents, 0);
-  const uncapped = totalHintsUsed * HINT_PENALTY_PER_VIEW;
-  const hintPenalty = Math.min(HINT_PENALTY_CAP, uncapped);
-
-  const effectiveAccuracy = Math.max(0, rawCorrectRate * (1 - hintPenalty));
-
-  const passed = rawCorrectRate >= PASS_MIN_RAW_RATE && effectiveAccuracy >= PASS_MIN_EFFECTIVE;
+  const v2 = computePracticeOutcomeV2({ questions: input.questions });
 
   return {
-    rawCorrectRate,
-    totalHintsUsed,
-    hintPenalty,
-    effectiveAccuracy,
-    passed,
+    rawCorrectRate: v2.rawCorrectRate,
+    totalHintsUsed: v2.totalHintsUsed,
+    hintPenalty: Math.min(HINT_PENALTY_CAP, v2.hintImpact),
+    effectiveAccuracy: v2.effectiveAccuracy,
+    noHintCorrectRate: v2.noHintCorrectRate,
+    passed: v2.passed,
   };
 }
 
 /**
- * Derives per-question outcomes from stored item states (first attempt correct flag + hint count).
+ * Derives per-question outcomes from stored item states.
  */
 export function outcomesFromItemStates(
-  states: Array<{ attempts: Array<{ correct: boolean }>; hintViews: unknown[] }>,
+  states: Array<{
+    attempts: Array<{ correct: boolean; hintsAtSubmit?: number }>;
+    hintViews: unknown[];
+  }>,
 ): PracticeQuestionOutcome[] {
   return states.map((s) => {
     const first = s.attempts[0];
     const firstTryCorrect = first?.correct === true;
+    const hintsAtSubmit = typeof first?.hintsAtSubmit === "number" ? first.hintsAtSubmit : 0;
+    const firstTryNoHint = firstTryCorrect && hintsAtSubmit === 0;
     return {
       firstTryCorrect,
       hintEvents: s.hintViews.length,
+      firstTryNoHint,
     };
   });
 }

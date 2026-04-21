@@ -4,7 +4,7 @@ import type { TopicProgressStage } from "../../generated/prisma";
 
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import { getLearnDashboardData } from "@/lib/learn-dashboard";
-import type { LearningTask } from "@/lib/learning-path";
+import type { ComposedLearningTask } from "@/lib/learning-path.types";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { getQueueStats } from "@/lib/fsrs";
 import { prisma } from "@/lib/prisma";
@@ -33,9 +33,9 @@ export type HomeMomentum =
   | { kind: "hint"; labelZh: string; labelEn: string; detailZh?: string; detailEn?: string };
 
 export type HomeDashboardData = {
-  /** Same task list & order as `/learn` — single source: `getLearnDashboardData` → `getRankedLearningTasks` */
-  tasks: LearningTask[];
-  nextTask: LearningTask | null;
+  /** Same task list & order as `/learn` — single source: `getLearnDashboardData` → `buildComposedLearningTasks` */
+  tasks: ComposedLearningTask[];
+  nextTask: ComposedLearningTask | null;
   totalEstimatedMinutes: number;
   hasUser: boolean;
   focusTopicKey: import("@/content/programs/phase1/types").Phase1TopicKey | null;
@@ -84,7 +84,7 @@ function stageCountsFromRows(rows: ReadonlyArray<{ stage: TopicProgressStage }>)
 }
 
 /**
- * Home dashboard: **reuses** `getLearnDashboardData()` so `/` and `/learn` share identical ranking (`getRankedLearningTasks`).
+ * Home dashboard: **reuses** `getLearnDashboardData()` so `/` and `/learn` share identical ranking (`buildComposedLearningTasks`).
  * Adds closed-loop aggregates only (UserTopicProgress, LearningSession, FSRS stats).
  */
 export async function getHomeDashboardData(): Promise<HomeDashboardData> {

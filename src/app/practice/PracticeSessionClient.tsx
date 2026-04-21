@@ -4,18 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
+import PracticeRunner from "@/components/practice/practice-runner";
 import PredictionPreferenceToggle, { usePredictionPreference } from "@/components/practice/PredictionPreferenceToggle";
-import PredictionStep from "@/components/practice/PredictionStep";
-import ChoiceFeedbackPanel from "@/components/session/ChoiceFeedbackPanel";
-import SessionHeader from "@/components/session/SessionHeader";
 import AppCard from "@/components/ui/AppCard";
-import CollapsibleNote from "@/components/ui/collapsible-note";
 import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
-import SectionLabel from "@/components/ui/section-label";
+import type { PracticeRuntimeMeta } from "@/lib/practice/practice-runtime-types";
 import type { PracticeCompletedSummary, PracticeQuestionPayload } from "@/lib/practice/practice-page-loader";
+import { practiceEntryHref } from "@/lib/practice/practice-entry-query";
 import { parsePracticeItemState } from "@/lib/practice/practice-state";
-import { buildChoiceFeedback } from "@/lib/choice-feedback";
-import { splitExplanationForFeedback } from "@/lib/explanation-split";
 import type { CompletionNextStep } from "@/lib/session-summary";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
@@ -35,6 +31,7 @@ type PracticeSessionClientProps = {
   initialPos: number;
   /** Serialized states aligned by position index */
   itemStatesJson: unknown[];
+  practiceRuntime: PracticeRuntimeMeta | null;
   completedSummary?: PracticeCompletedSummary;
   nextStep?: CompletionNextStep;
 };
@@ -47,6 +44,7 @@ export default function PracticeSessionClient({
   questions,
   initialPos,
   itemStatesJson,
+  practiceRuntime,
   completedSummary,
   nextStep,
 }: PracticeSessionClientProps) {
@@ -64,14 +62,6 @@ export default function PracticeSessionClient({
     [itemStatesJson],
   );
   const st = states[safePos] ?? parsePracticeItemState(null);
-  const isLast = n > 0 && safePos === n - 1;
-  const hintsDisabled = isLast;
-
-  const showPredictionStep =
-    predictionPref &&
-    st.status === "open" &&
-    q.prediction != null &&
-    !predictionGateDone;
 
   const markPredictionDone = () => {
     try {
@@ -93,11 +83,10 @@ export default function PracticeSessionClient({
     }
   }, [sessionId, safePos]);
 
-  const allResolved =
-    n > 0 && states.every((s) => s.status === "solved" || s.status === "revealed");
-
   const go = (pos: number) => {
-    router.push(`/practice?topicKey=${encodeURIComponent(topicKey)}&session=${encodeURIComponent(sessionId)}&pos=${pos}`);
+    router.push(
+      `/practice?topicKey=${encodeURIComponent(topicKey)}&session=${encodeURIComponent(sessionId)}&pos=${pos}`,
+    );
   };
 
   const onHint = (layer: 1 | 2 | 3) => {
@@ -126,6 +115,8 @@ export default function PracticeSessionClient({
     });
   };
 
+  const againHref = practiceEntryHref(topicKey, practiceRuntime);
+
   if (status === "completed" && completedSummary) {
     return (
       <LearningSurface className="space-y-6">
@@ -133,9 +124,10 @@ export default function PracticeSessionClient({
           <h2 className="text-lg font-semibold text-emerald-950">練習結果 · Practice result</h2>
           <ul className="mt-3 space-y-1 text-sm text-emerald-900">
             <li>原始正答率（首答）· Raw: {(completedSummary.rawCorrectRate * 100).toFixed(0)}%</li>
+            <li>無提示首答正確率 · No-hint first-try: {(completedSummary.noHintCorrectRate * 100).toFixed(0)}%</li>
             <li>有效準確度 · Effective: {(completedSummary.effectiveAccuracy * 100).toFixed(0)}%</li>
             <li>提示使用次數 · Hints used: {completedSummary.totalHintsUsed}</li>
-            <li>提示折損 · Hint penalty: {(completedSummary.hintPenalty * 100).toFixed(0)}%</li>
+            <li>提示折損（顯示上限）· Hint penalty (capped display): {(completedSummary.hintPenalty * 100).toFixed(0)}%</li>
             <li className="font-semibold">
               {completedSummary.passed ? "通過 · Passed" : "未達標 · Not passed"}
             </li>
@@ -173,7 +165,7 @@ export default function PracticeSessionClient({
               {nextStep?.ctaLabelZh ?? "前往驗收"} · Next step
             </Link>
             <Link
-              href={`/practice?topicKey=${encodeURIComponent(topicKey)}`}
+              href={againHref}
               className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
             >
               再練一次 · Practice again
@@ -194,201 +186,57 @@ export default function PracticeSessionClient({
     return (
       <AppCard>
         <p className="text-slate-700">此場次已結束或無效。請重新開始。</p>
-        <Link href={`/practice?topicKey=${encodeURIComponent(topicKey)}`} className="mt-3 inline-block text-primary-700">
+        <Link href={againHref} className="mt-3 inline-block text-primary-700">
           返回 · Back
         </Link>
       </AppCard>
     );
   }
 
-  const lastAttempt = st.attempts.length > 0 ? st.attempts[st.attempts.length - 1]! : null;
-  const expl = useMemo(() => splitExplanationForFeedback(q.explanation), [q.explanation]);
-  const choiceFeedback = useMemo(() => {
-    if (!lastAttempt) return null;
-    return buildChoiceFeedback({
-      questionText: q.questionText,
-      optionA: q.optionA,
-      optionB: q.optionB,
-      optionC: q.optionC,
-      optionD: q.optionD,
-      selectedChoice: lastAttempt.choice,
-      correctChoice: q.correctAnswer,
-      isCorrect: lastAttempt.correct === true,
-      explanation: q.explanation,
-    });
-  }, [lastAttempt, q]);
-
   return (
-    <div className="space-y-6">
-      <LearningSurface>
-        <SessionHeader
-          mode="practice"
-          current={safePos + 1}
-          total={n}
-          titleZh={label}
-          subtitleZh={`已用提示層數 ${st.maxHintLayerSeen} · 本題嘗試 ${st.attempts.length} / 3`}
-          topicOrModuleLabel="腳手架練習"
-        />
-        <div className="mt-2 flex justify-end">
-          <PredictionPreferenceToggle />
-        </div>
-      </LearningSurface>
-
-      <LearningSurface>
-        <AppCard padding="md" className="border-slate-200/80 bg-white/90">
-        <div className="space-y-3">
-          {q.reinforceBannerZh ? (
-            <p className="rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-3 py-2 text-sm font-medium text-emerald-950">
-              {q.reinforceBannerZh}
-            </p>
-          ) : null}
-          <SectionLabel kind="stem" />
-          <p className="max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-900">{q.questionText}</p>
-        </div>
-
-        {showPredictionStep && q.prediction ? (
-          <div className="mt-5">
-            <PredictionStep
-              payload={q.prediction}
-              onContinue={markPredictionDone}
-              compactHintZh="先諗，唔使即刻答選項。"
-            />
-          </div>
-        ) : null}
-
-        {!showPredictionStep ? (
-        <div className="mt-6 space-y-3">
-          <SectionLabel kind="options" />
-          <div className="grid gap-2 sm:grid-cols-2">
-          {(["A", "B", "C", "D"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              disabled={st.status !== "open" || pending}
-              onClick={() => onSubmit(k)}
-              className="rounded-xl border border-slate-200/90 bg-slate-50/50 px-3 py-3 text-left text-sm leading-relaxed text-slate-800 shadow-sm hover:bg-white disabled:opacity-40"
-            >
-              <span className="font-semibold text-primary-700">{k}.</span>{" "}
-              {k === "A" ? q.optionA : k === "B" ? q.optionB : k === "C" ? q.optionC : q.optionD}
-            </button>
-          ))}
-          </div>
-        </div>
-        ) : null}
-
-        {choiceFeedback && st.status === "open" && lastAttempt && !lastAttempt.correct ? (
-          <div className="mt-6">
-            <ChoiceFeedbackPanel feedback={choiceFeedback} tone="wrong" />
-          </div>
-        ) : null}
-
-        {!hintsDisabled && st.status === "open" && !showPredictionStep ? (
-          <div className="mt-6 border-t border-dashed border-slate-200/90 pt-6 opacity-95">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <SectionLabel kind="hint" />
-              <span className="text-[11px] text-slate-400">與送出分開 · separate from submit</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={pending || st.maxHintLayerSeen >= 1}
-                onClick={() => onHint(1)}
-                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-40"
-              >
-                提示 1
-              </button>
-              <button
-                type="button"
-                disabled={pending || st.maxHintLayerSeen < 1 || st.maxHintLayerSeen >= 2}
-                onClick={() => onHint(2)}
-                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-40"
-              >
-                提示 2
-              </button>
-              <button
-                type="button"
-                disabled={pending || st.maxHintLayerSeen < 2 || st.maxHintLayerSeen >= 3}
-                onClick={() => onHint(3)}
-                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-40"
-              >
-                提示 3
-              </button>
-            </div>
-            {st.maxHintLayerSeen >= 1 ? (
-              <p className="mt-3 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level1}</p>
-            ) : null}
-            {st.maxHintLayerSeen >= 2 ? (
-              <p className="mt-2 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level2}</p>
-            ) : null}
-            {st.maxHintLayerSeen >= 3 ? (
-              <p className="mt-2 max-w-prose rounded-lg border border-amber-100/80 bg-amber-50/60 p-3 text-sm leading-relaxed text-amber-950">{q.hints.level3}</p>
-            ) : null}
-          </div>
-        ) : hintsDisabled && !showPredictionStep ? (
-          <p className="mt-6 text-xs font-medium text-slate-500">最後一題：不提供提示層（預熱）。</p>
-        ) : null}
-
-        {st.status !== "open" ? (
-          <div className="mt-6 space-y-4 rounded-2xl border border-sky-100/90 bg-sky-50/35 p-4">
-            <SectionLabel kind="feedback" />
-            <div className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
-              <p className="text-xs text-slate-500">首答 · First try</p>
-              <p className="text-sm font-semibold text-slate-800">
-                {lastAttempt?.correct === true ? "✓" : lastAttempt?.correct === false ? "✗" : "—"}
-              </p>
-            </div>
-            {choiceFeedback ? (
-              <ChoiceFeedbackPanel
-                feedback={choiceFeedback}
-                tone={lastAttempt?.correct === true ? "correct" : "wrong"}
-              />
-            ) : null}
-            {expl.detail.trim().length > 0 ? (
-              <CollapsibleNote summaryZh="進一步說明" summaryEn="More detail">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{expl.detail}</p>
-              </CollapsibleNote>
-            ) : null}
-            {localReveal ? (
-              <CollapsibleNote summaryZh="補充解析" summaryEn="Extra" tone="default">
-                <p className="whitespace-pre-wrap text-sm text-slate-800">{localReveal}</p>
-              </CollapsibleNote>
-            ) : null}
-          </div>
-        ) : null}
-
-        {st.status !== "open" ? (
-          <div className="mt-6 flex flex-wrap gap-3">
-            {!isLast ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => go(safePos + 1)}
-                className={primaryButtonClass}
-              >
-                下一題 · Next
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={pending || !allResolved}
-                onClick={onFinish}
-                className={primaryButtonClass}
-              >
-                完成並結算 · Finish
-              </button>
-            )}
-          </div>
-        ) : null}
-        </AppCard>
-      </LearningSurface>
-    </div>
+    <PracticeRunner
+      label={label}
+      practiceRuntime={practiceRuntime}
+      questions={questions}
+      safePos={safePos}
+      st={st}
+      states={states}
+      pending={pending}
+      predictionPref={predictionPref}
+      predictionGateDone={predictionGateDone}
+      markPredictionDone={markPredictionDone}
+      localReveal={localReveal}
+      onHint={onHint}
+      onSubmit={onSubmit}
+      go={go}
+      onFinish={onFinish}
+    />
   );
 }
 
-export function PracticeStartClient({ topicKey }: { topicKey: string }) {
+export type PracticeStartPreset = {
+  mode?: string;
+  skill?: string;
+  moduleKey?: string;
+  count?: number;
+  /** Resolved target length for button copy */
+  targetQuestionCount: number;
+  isGuided: boolean;
+};
+
+export function PracticeStartClient({
+  topicKey,
+  preset,
+}: {
+  topicKey: string;
+  preset?: PracticeStartPreset;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+
+  const guided = preset?.isGuided === true;
+  const n = preset?.targetQuestionCount ?? 10;
 
   return (
     <div>
@@ -398,7 +246,12 @@ export function PracticeStartClient({ topicKey }: { topicKey: string }) {
         onClick={() => {
           setErr(null);
           startTransition(() => {
-            void startPracticeSession(topicKey).then((r) => {
+            void startPracticeSession(topicKey, {
+              mode: preset?.mode,
+              skill: preset?.skill,
+              moduleKey: preset?.moduleKey,
+              count: preset?.count,
+            }).then((r) => {
               if (r.ok && r.sessionId) {
                 router.push(
                   `/practice?topicKey=${encodeURIComponent(topicKey)}&session=${encodeURIComponent(r.sessionId)}&pos=0`,
@@ -411,7 +264,9 @@ export function PracticeStartClient({ topicKey }: { topicKey: string }) {
         }}
         className={primaryButtonClass}
       >
-        開始練習（10 題為目標）· Start practice
+        {guided
+          ? `開始引導練習（約 ${n} 題）· Start guided`
+          : `開始練習（10 題為目標）· Start practice`}
       </button>
       {err ? <p className="mt-2 text-sm text-rose-700">{err}</p> : null}
     </div>

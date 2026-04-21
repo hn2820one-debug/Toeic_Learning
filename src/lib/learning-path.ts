@@ -3,6 +3,7 @@
  * Re-exports types + rules; use `getRankedLearningTasks` / `getTopicProgressActions` everywhere.
  */
 export type {
+  ComposedLearningTask,
   FsrsQueueSnapshot,
   LearningTask,
   LearningTaskSource,
@@ -20,6 +21,9 @@ export {
 } from "./learning-path-rules";
 
 export type { TopicProgressLabels } from "./learning-path-rules";
+
+export { buildComposedLearningTasks, composedTaskBadgeKey } from "./today-task-composer";
+export type { BuildComposedTasksInput } from "./today-task-composer";
 
 /** @deprecated Prefer `getRankedLearningTasks` — alias kept for tests and gradual migration. */
 export { getRankedLearningTasks as rankLearningTasks } from "./learning-path-rules";

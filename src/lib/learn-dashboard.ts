@@ -6,16 +6,14 @@ import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-orde
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { getQueueStats } from "@/lib/fsrs";
-import {
-  getRankedLearningTasks,
-  mergeTopicOrderWithDb,
-  sumEstimatedMinutes,
-  type LearningTask,
-} from "@/lib/learning-path";
+import type { ComposedLearningTask } from "@/lib/learning-path.types";
+import { mergeTopicOrderWithDb } from "@/lib/learning-path";
 import { prisma } from "@/lib/prisma";
+import { getActiveStudyPlanView } from "@/lib/study-plan/loader";
+import { buildComposedLearningTasks } from "@/lib/today-task-composer";
 
 export type LearnDashboardPayload = {
-  tasks: LearningTask[];
+  tasks: ComposedLearningTask[];
   totalEstimatedMinutes: number;
   topicOrder: Phase1TopicKey[];
   hasUser: boolean;
@@ -38,12 +36,20 @@ export async function getLearnDashboardData(searchParams?: {
   const user = await getOrCreateDevUser();
   const userId = user?.id;
 
-  const [dbTopics, queueStats, progressRows] = await Promise.all([
+  const [dbTopics, queueStats, progressRows, studyPlan, nextRoiSkill] = await Promise.all([
     prisma.learningTopic.findMany({ orderBy: { orderIndex: "asc" } }),
     getQueueStats(),
     userId
       ? prisma.userTopicProgress.findMany({ where: { userId } })
       : Promise.resolve([]),
+    getActiveStudyPlanView(),
+    userId
+      ? prisma.learningSkill.findFirst({
+          where: { priority: "P1", within30DayPlan: true },
+          orderBy: [{ recommendedWeek: "asc" }, { orderIndex: "asc" }],
+          select: { skillCode: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const progressByTopic = Object.fromEntries(
@@ -63,16 +69,20 @@ export async function getLearnDashboardData(searchParams?: {
     dbTopics: dbTopics.map((t) => ({ topicKey: t.topicKey, orderIndex: t.orderIndex })),
   });
 
-  const tasks = getRankedLearningTasks({
+  const tasks = buildComposedLearningTasks({
     topicOrder,
     progressByTopic,
     fsrs: { dueCount: queueStats.dueCount, learningDueCount: queueStats.learningCount },
+    studyPlan,
     labels: Object.keys(labels).length > 0 ? labels : undefined,
+    nextRoiSkillCode: nextRoiSkill?.skillCode ?? null,
   });
+
+  const totalEstimatedMinutes = tasks.reduce((acc, t) => acc + t.estimatedMins, 0);
 
   return {
     tasks,
-    totalEstimatedMinutes: sumEstimatedMinutes(tasks),
+    totalEstimatedMinutes,
     topicOrder,
     hasUser: userId != null,
     focusTopicKey,

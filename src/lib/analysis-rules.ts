@@ -1,4 +1,4 @@
-import type { LearningTask } from "@/lib/learning-path";
+import type { ComposedLearningTask } from "@/lib/learning-path.types";
 
 export type AnalysisWindowDays = 7 | 30;
 
@@ -76,9 +76,9 @@ export type ErrorPattern = {
 };
 
 export type AnalysisNextAction = {
-  primaryTask: LearningTask | null;
+  primaryTask: ComposedLearningTask | null;
   topRoiTopic: WeakTopic | null;
-  suggestedFollowups: LearningTask[];
+  suggestedFollowups: ComposedLearningTask[];
   narrativeZh: string;
 };
 
@@ -261,14 +261,14 @@ export function classifyErrorPatterns(input: {
 }
 
 export function recommendNextActionsFromAnalysis(input: {
-  learningPathTasks: LearningTask[];
+  learningPathTasks: ComposedLearningTask[];
   weakTopics: WeakTopic[];
   stats7d: RecentLearningStats;
 }): AnalysisNextAction {
   const primaryTask = input.learningPathTasks[0] ?? null;
   const topRoiTopic = input.weakTopics[0] ?? null;
 
-  const suggestedFollowups: LearningTask[] = [];
+  const suggestedFollowups: ComposedLearningTask[] = [];
   if (input.learningPathTasks.length > 1) {
     suggestedFollowups.push(input.learningPathTasks[1]!);
   }
@@ -278,7 +278,7 @@ export function recommendNextActionsFromAnalysis(input: {
 
   let narrativeZh = "目前沒有足夠資料，先完成一次學習任務再回來看分析。";
   if (primaryTask) {
-    narrativeZh = `下一步建議先做 ${primaryTask.type.toUpperCase()}：${primaryTask.reasonZh}`;
+    narrativeZh = `下一步建議先做 ${primaryTask.type.toUpperCase()}：${primaryTask.reason}`;
   }
   if (input.stats7d.dueBacklog >= 15) {
     narrativeZh = `目前 review backlog 約 ${input.stats7d.dueBacklog}，今天優先清 REVIEW，避免到期卡繼續堆積。`;

@@ -7,13 +7,22 @@ import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-orde
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import PredictionPreferenceToggle from "@/components/practice/PredictionPreferenceToggle";
 import { getPracticePageView } from "@/lib/practice/practice-page-loader";
+import { resolvePracticeQuestionCount } from "@/lib/practice/resolve-practice-count";
 
-import PracticeSessionClient, { PracticeStartClient } from "./PracticeSessionClient";
+import PracticeSessionClient, { PracticeStartClient, type PracticeStartPreset } from "./PracticeSessionClient";
 
 export const dynamic = "force-dynamic";
 
 type PracticePageProps = {
-  searchParams?: { topicKey?: string; session?: string; pos?: string };
+  searchParams?: {
+    topicKey?: string;
+    session?: string;
+    pos?: string;
+    mode?: string;
+    skill?: string;
+    moduleKey?: string;
+    count?: string;
+  };
 };
 
 function parseTopicKey(raw: string | undefined): Phase1TopicKey | null {
@@ -24,11 +33,29 @@ function parseTopicKey(raw: string | undefined): Phase1TopicKey | null {
 }
 
 export default async function PracticePage({ searchParams }: PracticePageProps) {
-  const topicKey = parseTopicKey(
-    typeof searchParams?.topicKey === "string" ? searchParams.topicKey : undefined,
+  const sp = searchParams;
+  const topicKey = parseTopicKey(typeof sp?.topicKey === "string" ? sp.topicKey : undefined);
+  const sessionId = typeof sp?.session === "string" ? sp.session : undefined;
+  const pos = Number.parseInt(typeof sp?.pos === "string" ? sp.pos : "0", 10) || 0;
+  const mode = typeof sp?.mode === "string" ? sp.mode : undefined;
+  const skill = typeof sp?.skill === "string" ? sp.skill : undefined;
+  const moduleKey = typeof sp?.moduleKey === "string" ? sp.moduleKey : undefined;
+  const countParsed = Number.parseInt(typeof sp?.count === "string" ? sp.count : "", 10);
+  const countParam = Number.isFinite(countParsed) ? countParsed : undefined;
+  const isGuided =
+    mode === "lesson_drill" || mode === "mixed_practice" || Boolean(skill?.trim());
+  const targetQuestionCount = resolvePracticeQuestionCount(
+    isGuided ? mode : undefined,
+    isGuided ? countParam : undefined,
   );
-  const sessionId = typeof searchParams?.session === "string" ? searchParams.session : undefined;
-  const pos = Number.parseInt(typeof searchParams?.pos === "string" ? searchParams.pos : "0", 10) || 0;
+  const startPreset: PracticeStartPreset = {
+    mode,
+    skill,
+    moduleKey,
+    count: isGuided ? countParam : undefined,
+    targetQuestionCount,
+    isGuided,
+  };
 
   if (!topicKey) {
     return (
@@ -36,8 +63,8 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
         <BilingualHeading
           titleZh="練習"
           titleEn="Practice"
-          descriptionZh="請從「今日學習」或主題連結帶入 topicKey，例如 /practice?topicKey=office。"
-          descriptionEn="Open with ?topicKey=… from Today’s learning or a topic link."
+          descriptionZh="請從「今日學習」或主題連結帶入 topicKey；引導練習可加 mode／skill，例如 /practice?topicKey=office&mode=lesson_drill&skill=grammar_svc&count=7。"
+          descriptionEn="Use ?topicKey=…; guided drill can add mode/skill, e.g. …&mode=lesson_drill&skill=grammar_svc&count=7."
         />
         <AppCard padding="md">
           <Link href="/learn" className="font-semibold text-primary-700 underline">
@@ -65,10 +92,18 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
     return (
       <div>
         <BilingualHeading
-          titleZh="腳手架練習"
-          titleEn="Scaffolded practice"
-          descriptionZh="有提示、可重試，不計正式戰績。預設 10 題（題量不足時會自動降級選題）。"
-          descriptionEn="Hints and retries; does not update ELO. Target 10 questions with graceful fallback."
+          titleZh={isGuided ? "引導練習 · 雙軸題庫" : "腳手架練習"}
+          titleEn={isGuided ? "Guided dual-axis practice" : "Scaffolded practice"}
+          descriptionZh={
+            isGuided
+              ? `按技能／主題揀題（約 ${targetQuestionCount} 題）；有提示、可重試，不計正式戰績。題量不足會自動放寬選題。`
+              : "有提示、可重試，不計正式戰績。預設 10 題（題量不足時會自動降級選題）。"
+          }
+          descriptionEn={
+            isGuided
+              ? `Skill/topic-aware selection (~${targetQuestionCount} items). Hints and retries; no ELO. Falls back if the bank is thin.`
+              : "Hints and retries; does not update ELO. Target 10 questions with graceful fallback."
+          }
         />
         <div className="mb-6 rounded-2xl border border-sky-200/80 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
           <p className="font-semibold">主題 · Topic</p>
@@ -104,7 +139,7 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
               </div>
             </div>
           ) : null}
-          <PracticeStartClient topicKey={topicKey} />
+          <PracticeStartClient topicKey={topicKey} preset={startPreset} />
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={`/learn/${encodeURIComponent(topicKey)}`}
@@ -124,7 +159,7 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
         <div>
           <BilingualHeading titleZh="練習" titleEn="Practice" descriptionZh="" descriptionEn="" />
           <AppCard>此場次已放棄。請重新開始。</AppCard>
-          <PracticeStartClient topicKey={view.topicKey} />
+          <PracticeStartClient topicKey={view.topicKey} preset={startPreset} />
         </div>
       );
     }
@@ -145,6 +180,7 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
           questions={view.questions}
           initialPos={view.currentPosition}
           itemStatesJson={view.itemStatesJson}
+          practiceRuntime={view.practiceRuntime}
           completedSummary={view.completedSummary}
           nextStep={view.nextStep}
         />

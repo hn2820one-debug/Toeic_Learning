@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { LearningTask } from "@/lib/learning-path";
+import type { ComposedLearningTask } from "@/lib/learning-path.types";
 import { getLearnDashboardData } from "@/lib/learn-dashboard";
 
 export type SessionProgressViewModel = {
@@ -23,7 +23,7 @@ export function getSessionProgressViewModel(input: { current: number; total: num
 }
 
 export type CompletionNextStep = {
-  task: LearningTask | null;
+  task: ComposedLearningTask | null;
   titleZh: string;
   detailZh: string;
   ctaLabelZh: string;
@@ -31,7 +31,7 @@ export type CompletionNextStep = {
 };
 
 export function buildCompletionNextStep(input: {
-  recommendedTask: LearningTask | null;
+  recommendedTask: ComposedLearningTask | null;
   defaultHref: string;
   defaultTitleZh: string;
   defaultDetailZh: string;
@@ -49,8 +49,8 @@ export function buildCompletionNextStep(input: {
   return {
     task: t,
     titleZh: `下一步：${t.type.toUpperCase()}`,
-    detailZh: t.reasonZh,
-    ctaLabelZh: t.ctaLabelZh || "前往下一步",
+    detailZh: t.reason,
+    ctaLabelZh: "前往下一步",
     href: t.href,
   };
 }

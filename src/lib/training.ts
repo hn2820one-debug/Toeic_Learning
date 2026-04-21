@@ -11,7 +11,10 @@ import {
 } from "./fsrs";
 import { getDevUserIdForSession } from "./dev-user";
 import { prisma } from "./prisma";
-import { composeSession } from "./session-composer";
+import {
+  composeSession,
+  type ComposeSessionInput,
+} from "./session-composer";
 import { buildAnswerHistorySnapshotData } from "./answer-history-snapshots";
 
 type SearchParamValue = string | string[] | undefined;
@@ -26,6 +29,12 @@ const RATING_VALUE_MAP: Record<FsrsRatingName, SchedulerRating> = {
 };
 
 export const TRAINING_QUESTION_LIMIT = 5;
+
+export type { ComposeSessionInput } from "./session-composer";
+
+export type ComposeTrainingSessionResult =
+  | { ok: true; sessionId: number }
+  | { ok: false; reason: "no-questions" };
 export const ACTIVE_SESSION_COOKIE_NAME = "activeSessionId";
 export const ACTIVE_SESSION_COOKIE_MAX_AGE_SECONDS = 2 * 24 * 60 * 60;
 
@@ -260,18 +269,35 @@ export async function getActiveSessionBannerState(sessionIdValue: string | undef
   };
 }
 
-export async function pickTrainingQuestionIds(limit = TRAINING_QUESTION_LIMIT) {
-  return composeSession(limit);
+/**
+ * Pick question ids for `/training` using the mode-aware composer.
+ * - `number` — legacy shorthand: `{ mode: "mixed_practice", count: n }`
+ * - `ComposeSessionInput` — full closed-loop intent (diagnostic, drill, …)
+ */
+export async function pickTrainingQuestionIds(
+  limitOrInput: number | ComposeSessionInput = TRAINING_QUESTION_LIMIT,
+): Promise<number[]> {
+  if (typeof limitOrInput === "number") {
+    return composeSession({ mode: "mixed_practice", count: limitOrInput });
+  }
+  return composeSession({
+    ...limitOrInput,
+    count: limitOrInput.count ?? TRAINING_QUESTION_LIMIT,
+  });
 }
 
-export async function createStudySession(questionIds: number[]) {
+export async function createStudySession(
+  questionIds: number[],
+  options?: { mode?: ComposeSessionInput["mode"] },
+) {
   const userId = await getDevUserIdForSession();
+  const mode = options?.mode ?? "mixed_practice";
 
   return prisma.studySession.create({
     data: {
       ...(userId !== undefined ? { userId } : {}),
       startedAt: new Date(),
-      mode: "quick",
+      mode,
       targetCount: questionIds.length,
       totalQuestions: questionIds.length,
       items: {
@@ -283,6 +309,23 @@ export async function createStudySession(questionIds: number[]) {
     },
     select: { id: true },
   });
+}
+
+/** Planner + persist: use from server actions when starting a closed-loop training run. */
+export async function composeAndCreateTrainingSession(
+  input: ComposeSessionInput,
+): Promise<ComposeTrainingSessionResult> {
+  const questionIds = await composeSession({
+    ...input,
+    count: input.count ?? TRAINING_QUESTION_LIMIT,
+  });
+
+  if (questionIds.length === 0) {
+    return { ok: false, reason: "no-questions" };
+  }
+
+  const session = await createStudySession(questionIds, { mode: input.mode });
+  return { ok: true, sessionId: session.id };
 }
 
 export async function getTrainingPageState(searchParams?: TrainingPageSearchParams): Promise<TrainingPageState> {

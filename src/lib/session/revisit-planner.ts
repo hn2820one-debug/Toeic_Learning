@@ -11,6 +11,7 @@ import {
   parsePracticeItemState,
 } from "@/lib/practice/practice-state";
 import type { Prisma } from "../../../generated/prisma";
+import { mergeRevisitMetaIncrement } from "@/lib/practice/practice-session-runtime";
 import { prisma } from "@/lib/prisma";
 
 export const MAX_IN_SESSION_REVISITS = 2;
@@ -384,10 +385,7 @@ export async function planAndInsertSessionRevisit(params: {
     reinforceKind: "in_session",
   };
 
-  const nextMeta: RevisitMetaV1 = {
-    v: 1,
-    revisitCount: meta.revisitCount + 1,
-  };
+  const nextMeta = mergeRevisitMetaIncrement(session.revisitMetaJson, meta.revisitCount + 1);
 
   await prisma.$transaction([
     prisma.learningSessionItem.updateMany({

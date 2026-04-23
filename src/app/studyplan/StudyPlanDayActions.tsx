@@ -36,11 +36,11 @@ export default function StudyPlanDayActions({ dailyPlanItemId, completed, compac
       >
         {completed ? (
           <span className="flex items-center gap-1">
-            <Undo2 size={12} /> Undo
+            <Undo2 size={12} /> 取消完成
           </span>
         ) : (
           <span className="flex items-center gap-1">
-            <CheckCircle2 size={12} /> Mark done
+            <CheckCircle2 size={12} /> 完成
           </span>
         )}
       </button>

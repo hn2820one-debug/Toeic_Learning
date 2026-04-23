@@ -84,7 +84,7 @@ Technical read only—no value judgment.
 | Architecture & data-model direction | `docs/closed-loop/technical-design.md` | **Documentation** |
 | Milestone roadmap | `docs/closed-loop/delivery-plan.md` | **Documentation** |
 | Prompt inventory & contracts | `docs/closed-loop/prompt-pack.md` | **Documentation** |
-| Index | `docs/closed-loop/README.md` | **Documentation** |
+| Index | `docs/operator-manual/closed-loop-README.md` (see also `docs/closed-loop/README.md`) | **Documentation** |
 | Phase 1 module definitions | `src/content/programs/phase1/` (`modules.ts`, `skill-map.ts`, `types.ts`) | **TS data / scaffolding** — not wired to `composeSession` or routes |
 | Closed-loop prompt builders | `src/lib/llm/closed-loop-prompts.ts` | **TS scaffolding** — **no imports** from other `src/` files found (`grep` for `closed-loop-prompts` returns none) |
 | Shared LLM types | `src/lib/llm/types.ts` | **TS scaffolding** — used when wired |

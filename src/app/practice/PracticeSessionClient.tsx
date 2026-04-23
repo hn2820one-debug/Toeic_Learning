@@ -20,6 +20,7 @@ import {
   revealPracticeHint,
   startPracticeSession,
   submitPracticeAnswer,
+  type PracticeActionResult,
 } from "./actions";
 
 type PracticeSessionClientProps = {
@@ -224,12 +225,31 @@ export type PracticeStartPreset = {
   isGuided: boolean;
 };
 
+function formatPracticeStartError(r: Extract<PracticeActionResult, { ok: false }>): string {
+  if (r.error === "insufficient_questions" && r.detail && typeof r.detail === "object") {
+    const d = r.detail as {
+      requestedCount?: number;
+      actualCount?: number;
+      skillCode?: string;
+      hintZh?: string;
+    };
+    return `${d.hintZh ?? "題量不足以完成本場 strict 練習"}（已選 ${d.actualCount ?? 0} / 目標 ${d.requestedCount ?? "?"}；skill=${d.skillCode ?? "—"}）`;
+  }
+  if (r.error === "skill_required" && r.detail && typeof r.detail === "object") {
+    const d = r.detail as { hintZh?: string };
+    return d.hintZh ?? "必須帶入 skill（primaryLearningSkillCode）。";
+  }
+  return r.error;
+}
+
 export function PracticeStartClient({
   topicKey,
   preset,
+  disabled,
 }: {
   topicKey: string;
   preset?: PracticeStartPreset;
+  disabled?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -242,7 +262,7 @@ export function PracticeStartClient({
     <div>
       <button
         type="button"
-        disabled={pending}
+        disabled={pending || disabled}
         onClick={() => {
           setErr(null);
           startTransition(() => {
@@ -257,7 +277,7 @@ export function PracticeStartClient({
                   `/practice?topicKey=${encodeURIComponent(topicKey)}&session=${encodeURIComponent(r.sessionId)}&pos=0`,
                 );
               } else {
-                setErr(r.ok ? null : r.error ?? "failed");
+                setErr(r.ok ? null : formatPracticeStartError(r));
               }
             });
           });
@@ -269,6 +289,12 @@ export function PracticeStartClient({
           : `開始練習（10 題為目標）· Start practice`}
       </button>
       {err ? <p className="mt-2 text-sm text-rose-700">{err}</p> : null}
+      {guided && preset?.skill?.trim() ? (
+        <p className="mt-2 text-xs text-slate-500">
+          題量不足時可改試{" "}
+          <span className="font-mono">mixed_practice</span>（仍須帶同一 skill，系統才會放寬非 strict 補題）。
+        </p>
+      ) : null}
     </div>
   );
 }

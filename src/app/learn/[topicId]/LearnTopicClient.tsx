@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 
 import DisplayLessonBlockView from "@/components/learn/DisplayLessonBlockView";
-import PredictionPreferenceToggle from "@/components/practice/PredictionPreferenceToggle";
 import LessonProgressHeader from "@/components/learn/LessonProgressHeader";
+import ContentClassificationStrip from "@/components/learning/ContentClassificationStrip";
+import PredictionPreferenceToggle from "@/components/practice/PredictionPreferenceToggle";
 import AppCard from "@/components/ui/AppCard";
 import { LearningPageCanvas, LearningSurface } from "@/components/ui/learning-surface";
 import type { DisplayLessonBlock } from "@/lib/learn/lesson-display";
 import type { LearnTopicLessonRow } from "@/lib/learn-topic-page";
+import type { ClassificationStripProps } from "@/lib/learning-content-classification";
+import type { SkillCoverageReport } from "@/lib/skill-coverage/audit-skill-coverage";
 import type { LearnProgressPayload } from "@/lib/learn-progress-json";
 import { isAllLessonsUnderstood } from "@/lib/learn-progress-json";
 import type { TopicProgressStage } from "../../../../generated/prisma";
@@ -24,6 +27,10 @@ import {
 type LearnTopicClientProps = {
   topicKey: string;
   topicLabel: string;
+  classificationStrip: ClassificationStripProps;
+  learningObjectiveZh: string | null;
+  canonicalPrimaryLearningSkillCode: string;
+  primarySkillCoverage: SkillCoverageReport;
   lessons: LearnTopicLessonRow[];
   lessonPos: number;
   /** Pedagogical display blocks for the active lesson (server-parsed). */
@@ -39,6 +46,10 @@ type LearnTopicClientProps = {
 export default function LearnTopicClient({
   topicKey,
   topicLabel,
+  classificationStrip,
+  learningObjectiveZh,
+  canonicalPrimaryLearningSkillCode,
+  primarySkillCoverage,
   lessons,
   lessonPos,
   displayBlocks,
@@ -171,10 +182,12 @@ export default function LearnTopicClient({
             可隨時回來瀏覽課節；進度不會重置。接下來進入練習鞏固。
           </p>
           <Link
-            href={`/practice?topicKey=${encodeURIComponent(topicKey)}`}
+            href={`/practice?topicKey=${encodeURIComponent(topicKey)}&mode=lesson_drill&skill=${encodeURIComponent(
+              canonicalPrimaryLearningSkillCode,
+            )}&count=10`}
             className="mt-4 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800"
           >
-            前往練習 · Go to practice
+            前往練習（帶 skill）· Go to practice
           </Link>
         </AppCard>
       ) : null}
@@ -185,6 +198,22 @@ export default function LearnTopicClient({
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">LEARN · 例句優先 · 一屏一步</p>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">{topicLabel}</h1>
+            <ContentClassificationStrip strip={classificationStrip} className="mt-3" />
+            {!primarySkillCoverage.usable_for_practice ? (
+              <AppCard padding="md" className="mt-3 border-amber-300 bg-amber-50/95">
+                <p className="text-sm font-semibold text-amber-950">題庫 strict 練習可能不足 · Low bank coverage</p>
+                <p className="mt-1 text-xs text-amber-900/95">
+                  目前 skill「{canonicalPrimaryLearningSkillCode}」僅 {primarySkillCoverage.total_questions}{" "}
+                  題（strict 引導練習建議 ≥10）。開始練習時系統會透明回報，不會偷偷換成其他 skill。
+                </p>
+              </AppCard>
+            ) : null}
+            {learningObjectiveZh ? (
+              <p className="mt-2 text-sm text-slate-700">
+                <span className="font-semibold text-slate-500">學習目標 · Objective · </span>
+                {learningObjectiveZh}
+              </p>
+            ) : null}
             {hasUser ? (
               <p className="mt-2 text-sm text-slate-600">
                 <Link
@@ -217,6 +246,27 @@ export default function LearnTopicClient({
         <div className="flex justify-end">
           <PredictionPreferenceToggle className="text-slate-500" />
         </div>
+
+        {current ? (
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/practice?topicKey=${encodeURIComponent(topicKey)}&mode=lesson_drill&skill=${encodeURIComponent(
+                current.primaryLearningSkillCode,
+              )}&count=10`}
+              className="inline-flex rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-900 hover:bg-sky-100"
+            >
+              引導練習本節主 skill · Practice ({current.primaryLearningSkillCode})
+            </Link>
+            <Link
+              href={`/test?topicKey=${encodeURIComponent(topicKey)}&mode=checkpoint&skill=${encodeURIComponent(
+                current.primaryLearningSkillCode,
+              )}&count=15`}
+              className="inline-flex rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100"
+            >
+              驗收（需 Practiced）· Test checkpoint
+            </Link>
+          </div>
+        ) : null}
 
         <div className="min-h-[12rem]">
           {!current?.bodyMarkdown?.trim() ? (

@@ -47,7 +47,9 @@ async function ensureLearningTopic(topicKey: Phase1TopicKey) {
   });
 }
 
-export type TestActionResult = { ok: true } | { ok: false; error: string };
+export type TestActionResult =
+  | { ok: true }
+  | { ok: false; error: string; detail?: Record<string, unknown> };
 
 export type StartTestSessionOptions = {
   mode?: string;
@@ -91,6 +93,18 @@ export async function startTestSession(
   const mod = primaryModuleForTopic(topicKey);
 
   const targetN = resolveTestQuestionCount(options?.mode, options?.count);
+  const skillOpt = options?.skill?.trim();
+  const mode = options?.mode?.trim() ?? "";
+  if ((mode === "checkpoint" || Boolean(skillOpt)) && !skillOpt) {
+    return {
+      ok: false,
+      error: "skill_required",
+      detail: {
+        topicKey,
+        hintZh: "驗收 checkpoint 必須帶 primaryLearningSkillCode（與教材／計劃一致）。",
+      },
+    };
+  }
 
   let ids: number[] = [];
   let checkpointMeta: CheckpointRuntimeMeta | undefined;
@@ -103,9 +117,30 @@ export async function startTestSession(
     count: options?.count,
   });
 
-  if (checkpoint && checkpoint.questionIds.length > 0) {
-    ids = checkpoint.questionIds;
-    checkpointMeta = checkpoint.meta;
+  if (checkpoint) {
+    if (
+      skillOpt &&
+      (checkpoint.status === "insufficient_questions" || checkpoint.questionIds.length < targetN)
+    ) {
+      return {
+        ok: false,
+        error: "insufficient_questions",
+        detail: {
+          skillCode: skillOpt,
+          requestedCount: checkpoint.requestedCount,
+          actualCount: checkpoint.questionIds.length,
+          hintZh: "此 skill 題量不足以組滿驗收；請補題庫後再試（不會改用無關 skill 的題目補滿）。",
+        },
+      };
+    }
+    if (checkpoint.questionIds.length > 0) {
+      ids = checkpoint.questionIds;
+      checkpointMeta = checkpoint.meta;
+    } else if (skillOpt) {
+      return { ok: false, error: "no_questions", detail: { skillCode: skillOpt } };
+    }
+  } else if (skillOpt) {
+    return { ok: false, error: "no_questions", detail: { skillCode: skillOpt } };
   } else {
     const legacy = await buildTestQuestionSet(topicKey);
     const take = Math.min(targetN, legacy.questionIds.length);
@@ -121,7 +156,7 @@ export async function startTestSession(
   }
 
   if (ids.length === 0) {
-    return { ok: false, error: "insufficient_questions" };
+    return { ok: false, error: "insufficient_questions", detail: { topicKey } };
   }
 
   const revisitMetaJson: Prisma.InputJsonValue = {

@@ -115,7 +115,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
   let sumCorrect = 0;
   let sumTotalForAcc = 0;
   for (const c of grid.values()) {
-    if (c.hasActivity) studyDays += 1;
+    if (c.hasMeaningfulLearningActivity) studyDays += 1;
     sumItems += c.totalItems;
     sumCorrect += c.correctCount;
     sumTotalForAcc += c.totalItems;
@@ -129,8 +129,8 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       <BilingualHeading
         titleZh="學習日曆"
         titleEn="Learning calendar"
-        descriptionZh="依日期檢視學習節奏與題量（讀取 LearningSession；若有 30 日計劃則併入 DailyPlanItem）。"
-        descriptionEn="Browse study volume by date (LearningSession; merges DailyPlanItem when a 30-day plan exists)."
+        descriptionZh="依日期檢視學習節奏與題量；「有效學習」含完成練習／測驗、複習評分、計劃勾選、驗收通過或當日完成主題 Learn 等（非僅開啟頁面）。"
+        descriptionEn="Volume by date; “effective study” days count completed work, ratings, plan rows, checkpoint passes, or topic learn completion—not mere page views."
       />
 
       <LearningSurface>
@@ -226,7 +226,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
 
         <div className="mt-6 grid gap-3 border-t border-slate-200 pt-4 text-sm text-slate-800 sm:grid-cols-3">
           <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3">
-            <p className="text-xs text-slate-600">有紀錄天數</p>
+            <p className="text-xs text-slate-600">有效學習天數</p>
             <p className="mt-1 text-[24px] font-medium text-slate-900">{studyDays}</p>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3">

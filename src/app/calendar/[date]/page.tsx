@@ -142,11 +142,14 @@ export default async function CalendarDayPage({ params }: DayPageProps) {
 
             {detail.topicProgress.length > 0 ? (
               <section className="mt-6">
-                <h3 className="mb-2 text-sm font-medium text-slate-900">主題節點（里程碑日期）</h3>
+                <h3 className="mb-2 text-sm font-medium text-slate-900">主題里程碑（當日快照）</h3>
+                <p className="mb-2 text-xs text-slate-600">
+                  下列為當日有時間戳的節點標記；並非完整晉階歷史（無審計表則不顯示真實 from→to 轉移序）。
+                </p>
                 <ul className="space-y-1 text-sm text-slate-800">
                   {detail.topicProgress.map((t, i) => (
                     <li key={`${t.topicName}-${i}`}>
-                      [{t.topicName}] {t.fromStage} → {t.toStage} ✅
+                      [{t.topicName}] {t.fromStage === "—" ? `標記：${t.toStage}` : `${t.fromStage} → ${t.toStage}`}
                     </li>
                   ))}
                 </ul>

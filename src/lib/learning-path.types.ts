@@ -69,4 +69,14 @@ export type ComposedLearningTask = {
   topicKey?: string;
   primaryLearningSkillCode?: string;
   priority: number;
+  /** Populated by `enrichComposedTasksWithSkills` for UI — orthogonal to `topicKey`. */
+  contentDomain?: "grammar" | "vocabulary" | "reading" | "listening";
+  contentDomainLabelZh?: string;
+  skillKeyDisplay?: string | null;
+  primarySkillLabelZh?: string | null;
+  moduleTitleZh?: string | null;
+  moduleTitleEn?: string | null;
+  topicLabelZh?: string | null;
+  topicLabelEn?: string | null;
+  learningModeUi?: "learn" | "practice" | "test" | "review";
 };

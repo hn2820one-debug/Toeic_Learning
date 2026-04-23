@@ -65,12 +65,28 @@ export type DualAxisPracticeSpec = {
   moduleKey?: string | null;
   /** Capped 1–15 by caller */
   count: number;
+  /** From URL / action, e.g. lesson_drill | mixed_practice */
+  sessionMode?: string | null;
+  /**
+   * When true, only questions with matching `primaryLearningSkillCode` are used (plus optional topic filter on first pass).
+   * Default: true if `skill` is set and sessionMode is not mixed_practice.
+   */
+  strictSkillMatch?: boolean;
+};
+
+export type DualAxisSelectionResult = {
+  ids: number[];
+  status: "ok" | "insufficient_questions";
+  requestedCount: number;
+  strictSkillMatch: boolean;
+  actualCount: number;
 };
 
 /**
- * Dual-axis selection: prefer skill + topic → skill only → topic only → adjacent topics → module skillKeys → global.
+ * Dual-axis selection. **Strict** path never widens to topic-only / global (transparent failure).
+ * Non-strict (`mixed_practice`) keeps legacy widen behaviour.
  */
-export async function selectDualAxisPracticeQuestionIds(spec: DualAxisPracticeSpec): Promise<number[]> {
+export async function selectDualAxisPracticeQuestionIds(spec: DualAxisPracticeSpec): Promise<DualAxisSelectionResult> {
   const target = Math.max(1, spec.count);
   const skill = spec.skill?.trim() || null;
   const topic = spec.topicKey;
@@ -79,9 +95,24 @@ export async function selectDualAxisPracticeQuestionIds(spec: DualAxisPracticeSp
 
   const need = () => target - out.length;
 
+  const mode = spec.sessionMode?.trim() ?? "";
+  const strict =
+    spec.strictSkillMatch ??
+    (Boolean(skill) && mode !== "mixed_practice");
+
   if (skill) {
     await takeIds({ primaryLearningSkillCode: skill, topicKey: topic }, used, need(), out);
     await takeIds({ primaryLearningSkillCode: skill }, used, need(), out);
+    if (strict) {
+      const actualCount = out.length;
+      return {
+        ids: out.slice(0, target),
+        status: actualCount >= target ? "ok" : "insufficient_questions",
+        requestedCount: target,
+        strictSkillMatch: strict,
+        actualCount,
+      };
+    }
   }
 
   await takeIds({ topicKey: topic }, used, need(), out);
@@ -100,6 +131,20 @@ export async function selectDualAxisPracticeQuestionIds(spec: DualAxisPracticeSp
 
   await takeIds({}, used, need(), out);
 
-  return out.slice(0, target);
+  const actualCount = out.length;
+  const finalIds = out.slice(0, target);
+  const status =
+    strict && actualCount < target
+      ? "insufficient_questions"
+      : finalIds.length === 0
+        ? "insufficient_questions"
+        : "ok";
+  return {
+    ids: finalIds,
+    status,
+    requestedCount: target,
+    strictSkillMatch: strict,
+    actualCount,
+  };
 }
 

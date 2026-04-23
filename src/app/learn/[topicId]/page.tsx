@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 type LearnTopicPageProps = {
   params: { topicId: string };
-  searchParams?: { lesson?: string; card?: string };
+  searchParams?: { lesson?: string; card?: string; primaryLearningSkillCode?: string };
 };
 
 function parseLessonIndex(raw: string | undefined, max: number): number {
@@ -31,7 +31,12 @@ function parseCardIndex(raw: string | undefined, max: number): number {
 }
 
 export default async function LearnTopicPage({ params, searchParams }: LearnTopicPageProps) {
-  const data = await getLearnTopicPageData(params.topicId);
+  const data = await getLearnTopicPageData(params.topicId, {
+    primaryLearningSkillCode:
+      typeof searchParams?.primaryLearningSkillCode === "string"
+        ? searchParams.primaryLearningSkillCode
+        : undefined,
+  });
   if (data.kind === "not_found") {
     notFound();
   }
@@ -60,6 +65,10 @@ export default async function LearnTopicPage({ params, searchParams }: LearnTopi
       <LearnTopicClient
         topicKey={data.topicKey}
         topicLabel={data.topicLabel}
+        classificationStrip={data.classificationStrip}
+        learningObjectiveZh={data.learningObjectiveZh}
+        canonicalPrimaryLearningSkillCode={data.canonicalPrimaryLearningSkillCode}
+        primarySkillCoverage={data.primarySkillCoverage}
         lessons={data.lessons}
         lessonPos={lessonPos}
         displayBlocks={displayBlocks}

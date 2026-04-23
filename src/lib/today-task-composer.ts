@@ -89,15 +89,19 @@ function dailyPlanTaskType(planDay: StudyPlanView["days"][number]): ComposedLear
 }
 
 function practiceQuery(topicKey: Phase1TopicKey, skillCode?: string | null): string {
-  const base = `topicKey=${encodeURIComponent(topicKey)}`;
+  const base = `topicKey=${encodeURIComponent(topicKey)}&mode=lesson_drill`;
   if (skillCode?.trim()) {
-    return `${base}&primaryLearningSkillCode=${encodeURIComponent(skillCode.trim())}`;
+    return `${base}&skill=${encodeURIComponent(skillCode.trim())}`;
   }
   return base;
 }
 
 function testQuery(topicKey: Phase1TopicKey, skillCode?: string | null): string {
-  return practiceQuery(topicKey, skillCode);
+  const base = `topicKey=${encodeURIComponent(topicKey)}&mode=checkpoint`;
+  if (skillCode?.trim()) {
+    return `${base}&skill=${encodeURIComponent(skillCode.trim())}`;
+  }
+  return base;
 }
 
 /**

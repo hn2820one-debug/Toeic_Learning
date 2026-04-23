@@ -2,13 +2,22 @@ import "server-only";
 
 import type { TopicProgressStage } from "../../generated/prisma";
 
+import { PHASE1_MODULES } from "@/content/programs/phase1/modules";
 import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { validateLessonStructure } from "@/lib/content-qa-rules";
+import {
+  buildClassificationStrip,
+  type ClassificationStripProps,
+} from "@/lib/learning-content-classification";
+import { primaryModuleForTopic } from "@/lib/learning-path-rules";
 import { getOrCreateDevUser } from "@/lib/dev-user";
 import { parseLearnProgressJson } from "@/lib/learn-progress-json";
 import { prisma } from "@/lib/prisma";
+import type { SkillCoverageReport } from "@/lib/skill-coverage/audit-skill-coverage";
+import { auditSkillCoverage } from "@/lib/skill-coverage/audit-skill-coverage";
+import { defaultPrimaryLearningSkillForTopic } from "@/lib/topic-default-skill";
 
 export type LearnTopicLessonRow = {
   id: string;
@@ -17,6 +26,9 @@ export type LearnTopicLessonRow = {
   titleEn: string;
   bodyMarkdown: string | null;
   moduleKey: string;
+  /** Canonical bank skill for strict practice/test (until Lesson DB column exists). */
+  primaryLearningSkillCode: string;
+  secondarySkills: string[];
 };
 
 export type LearnTopicPageData =
@@ -31,6 +43,14 @@ export type LearnTopicPageData =
       learnProgress: ReturnType<typeof parseLearnProgressJson>;
       hasUser: boolean;
       showAdminHint: boolean;
+      /** Multi-axis summary for the active topic / optional focus skill (URL). */
+      classificationStrip: ClassificationStripProps;
+      /** First module learning objective (curriculum), when module is known. */
+      learningObjectiveZh: string | null;
+      /** Resolved primary skill for this topic view (URL override or topic default). */
+      canonicalPrimaryLearningSkillCode: string;
+      /** Bank coverage for canonical primary (strict feasibility). */
+      primarySkillCoverage: SkillCoverageReport;
     };
 
 function isPhase1TopicKey(id: string): id is Phase1TopicKey {
@@ -53,7 +73,10 @@ async function ensureLearningTopicRow(topicKey: Phase1TopicKey) {
   });
 }
 
-export async function getLearnTopicPageData(topicId: string): Promise<LearnTopicPageData> {
+export async function getLearnTopicPageData(
+  topicId: string,
+  opts?: { primaryLearningSkillCode?: string | null },
+): Promise<LearnTopicPageData> {
   if (!isPhase1TopicKey(topicId)) {
     return { kind: "not_found" };
   }
@@ -72,9 +95,27 @@ export async function getLearnTopicPageData(topicId: string): Promise<LearnTopic
     },
   });
 
+  const focusSkill = opts?.primaryLearningSkillCode?.trim() || null;
+  const focusRow = focusSkill
+    ? await prisma.learningSkill.findUnique({
+        where: { skillCode: focusSkill },
+        select: { skillCode: true, labelZh: true, category: true },
+      })
+    : null;
+
+  const canonicalPrimaryLearningSkillCode =
+    focusRow?.skillCode ?? defaultPrimaryLearningSkillForTopic(topicKey);
+
+  const primaryRow =
+    focusRow ??
+    (await prisma.learningSkill.findUnique({
+      where: { skillCode: canonicalPrimaryLearningSkillCode },
+      select: { skillCode: true, labelZh: true, category: true },
+    }));
+
+  const primarySkillCoverage = await auditSkillCoverage(canonicalPrimaryLearningSkillCode);
+
   const lessons: LearnTopicLessonRow[] = lessonsRaw.map((r) => {
-    // Runtime hardening: low-quality lesson body should degrade gracefully instead of crashing rendering.
-    // Until DB qaStatus exists, derive from deterministic QA each load.
     const qaPassed = validateLessonStructure(r.bodyMarkdown ?? "").passed;
     return {
       id: r.id,
@@ -83,7 +124,23 @@ export async function getLearnTopicPageData(topicId: string): Promise<LearnTopic
       titleEn: r.titleEn,
       bodyMarkdown: qaPassed ? r.bodyMarkdown : null,
       moduleKey: r.moduleKey,
+      primaryLearningSkillCode: canonicalPrimaryLearningSkillCode,
+      secondarySkills: [],
     };
+  });
+
+  const defaultMod = primaryModuleForTopic(topicKey);
+  const firstLessonModule = lessons[0]?.moduleKey ?? defaultMod.moduleKey;
+  const modDef = PHASE1_MODULES.find((m) => m.moduleKey === firstLessonModule) ?? defaultMod;
+  const learningObjectiveZh = modDef.lessonObjectives[0]?.zh ?? null;
+
+  const classificationStrip = buildClassificationStrip({
+    skillCode: primaryRow?.skillCode ?? canonicalPrimaryLearningSkillCode,
+    skillCategory: primaryRow?.category ?? null,
+    skillLabelZh: primaryRow?.labelZh ?? null,
+    topicKey,
+    moduleKey: firstLessonModule,
+    mode: "learn",
   });
 
   const user = await getOrCreateDevUser();
@@ -98,6 +155,10 @@ export async function getLearnTopicPageData(topicId: string): Promise<LearnTopic
       learnProgress: parseLearnProgressJson(null),
       hasUser: false,
       showAdminHint: process.env.NODE_ENV === "development",
+      classificationStrip,
+      learningObjectiveZh,
+      canonicalPrimaryLearningSkillCode,
+      primarySkillCoverage,
     };
   }
 
@@ -119,5 +180,9 @@ export async function getLearnTopicPageData(topicId: string): Promise<LearnTopic
     learnProgress: parseLearnProgressJson(row?.learnProgressJson ?? null),
     hasUser: true,
     showAdminHint: process.env.NODE_ENV === "development" || process.env.ALLOW_LEARN_DEBUG === "1",
+    classificationStrip,
+    learningObjectiveZh,
+    canonicalPrimaryLearningSkillCode,
+    primarySkillCoverage,
   };
 }

@@ -20,6 +20,7 @@ export function formatYearMonth(d: Date, timeZone = "Asia/Taipei"): string {
   return `${y}-${m}`;
 }
 
+/** Calendar day key for bucketing instants (e.g. session `startedAt`) into a learner-local date. */
 export function formatYmd(d: Date, timeZone = "Asia/Taipei"): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -29,6 +30,7 @@ export function formatYmd(d: Date, timeZone = "Asia/Taipei"): string {
   }).format(d);
 }
 
+/** Inclusive start / exclusive end of the month in +08:00; pairs with `formatYmd` for Taipei calendar days. */
 export function monthBoundsUtc(year: number, month: number): { start: Date; end: Date } {
   const mm = String(month).padStart(2, "0");
   const start = new Date(`${year}-${mm}-01T00:00:00+08:00`);

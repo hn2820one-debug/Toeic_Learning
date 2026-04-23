@@ -26,6 +26,7 @@
 - **每日訓練：** 從整份題庫抽題的一場練習；作答、看解答、給複習評分（與「單一主題下的練習」不同入口，但都是有效練習）。
 - **歷史紀錄：** 看過去完成的練習場次與每題結果。
 - **週報：** 看一段時間內的練習摘要（內容會依你的資料量而變化）。
+- **學習日曆（/calendar）：** 用「台灣時區的日期」看每天有多少題、哪些模式（L/P/T/R/W）、以及**有效學習天數**（有實質完成：例如練習／測驗跑完、複習有評分、計劃勾選、驗收通過、或當天讀完該主題教材）；**不是**只開過頁面就算一天。點某一天可看當日場次細節；主題區塊若出現「里程碑」，是**當日時間戳的標記**，不是完整的階段晉升歷史。
 
 **English (short):**
 
@@ -39,6 +40,7 @@
 - **Daily training:** A session drawn from the full bank; answer, reveal, rate for spaced repetition (different entry than **topic practice**, both valid).
 - **History:** Past completed sessions and per-question results.
 - **Report:** Rolling weekly-style summary (depth depends on how much you have practiced).
+- **Learning calendar (`/calendar`):** Browse study volume by **local calendar day** (Taipei timezone). The month summary **Effective study days** counts days with **real progress** (e.g. finished practice/test, FSRS rating on review, checked-off plan rows, checkpoint pass, or **completed** topic reading)—not mere page views. Open a date for session detail; any **milestone** lines are **same-day markers**, not a full audited stage history.
 
 ---
 
@@ -195,6 +197,12 @@
 **中文：** 聽力題本內容需自行維護逐字稿與題目；預測步驟與補強抽題依題庫與規則可能**略過**。多帳號、雲端同步、正式登入產品化**不在**本機自用版保證範圍內。
 
 **English:** Listening workbook quality depends on content you store. Prediction/revisit may **skip** when data is thin. Multi-tenant cloud auth is **not** guaranteed in this self-use build.
+
+### 5.19 學習日曆 · Learning calendar
+
+**中文：** 從側邊欄或網址進入 **`/calendar`**。月曆上數字多半代表「當天作答／練習的題量」或時間；下方 **「有效學習天數」** 只統計**有實質進度**的日子（例如：一場練習或測驗做完、複習裡至少按過評分、30 日計劃裡勾了完成、驗收測驗通過、或當天讀完某主題教材並在教材流程標記完成）。若你只是打開教材滑一下但沒標「已理解」、或複習只開著不按評分，通常**不會**讓那一天變成「有效學習日」。點某一天進 **`/calendar/日期`** 可看當日有哪些場次；若看到主題「里程碑」說明，請當作**當日發生過什麼事的標記**，不是系統裡完整的「從哪一階升到哪一階」紀錄。
+
+**English:** Open **`/calendar`** from the sidebar or URL. Cell numbers mostly reflect **items practiced** or time that day; **Effective study days** counts only days with **meaningful progress** (finished practice/test, at least one FSRS **rating** in review, completed plan row, checkpoint pass, or **finished** topic reading with **Understood** marks). Skimming lessons without marking understood, or opening review without rating, usually does **not** count. **`/calendar/YYYY-MM-DD`** lists sessions for that date; **milestone** text describes **what was recorded that day**, not a full audited promotion history.
 
 ---
 

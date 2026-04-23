@@ -57,7 +57,9 @@ async function ensureLearningTopic(topicKey: Phase1TopicKey) {
   });
 }
 
-export type PracticeActionResult = { ok: true; sessionId?: string; error?: undefined } | { ok: false; error: string };
+export type PracticeActionResult =
+  | { ok: true; sessionId?: string; error?: undefined }
+  | { ok: false; error: string; detail?: Record<string, unknown> };
 
 export type StartPracticeSessionOptions = {
   mode?: string;
@@ -102,25 +104,50 @@ export async function startPracticeSession(
   let practiceRuntime: PracticeRuntimeMeta | undefined;
 
   if (dualAxis && targetCount != null) {
-    const picked = await selectDualAxisPracticeQuestionIds({
+    if (!options?.skill?.trim()) {
+      return {
+        ok: false,
+        error: "skill_required",
+        detail: {
+          topicKey,
+          hintZh: "引導／雙軸練習必須帶 primaryLearningSkillCode（由教材頁或計劃連結帶入）。",
+        },
+      };
+    }
+    const dual = await selectDualAxisPracticeQuestionIds({
       topicKey,
       skill: options?.skill?.trim() ?? null,
       moduleKey: options?.moduleKey?.trim() ?? null,
       count: targetCount,
+      sessionMode: options?.mode?.trim() ?? null,
     });
-    if (picked.length > 0) {
-      baseIds = picked;
-      practiceRuntime = {
-        dualAxis: true,
-        mode: options?.mode,
-        skill: options?.skill?.trim() || undefined,
-        moduleKey: options?.moduleKey?.trim() || mod.moduleKey,
-        count: picked.length,
+    if (dual.strictSkillMatch && dual.status === "insufficient_questions") {
+      return {
+        ok: false,
+        error: "insufficient_questions",
+        detail: {
+          skillCode: options?.skill?.trim(),
+          requestedCount: dual.requestedCount,
+          actualCount: dual.actualCount,
+          hintZh: "題庫中此 skill 的題量不足以組滿本場；請補題庫或改用 mixed_practice（仍須帶 skill）。",
+        },
       };
-    } else {
-      baseIds = await selectPracticeQuestionIds(topicKey, { userId: user.id });
-      practiceRuntime = undefined;
     }
+    if (dual.ids.length === 0) {
+      return {
+        ok: false,
+        error: "no_questions",
+        detail: { skillCode: options?.skill?.trim() },
+      };
+    }
+    baseIds = dual.ids;
+    practiceRuntime = {
+      dualAxis: true,
+      mode: options?.mode,
+      skill: options?.skill?.trim() || undefined,
+      moduleKey: options?.moduleKey?.trim() || mod.moduleKey,
+      count: dual.ids.length,
+    };
   } else {
     baseIds = await selectPracticeQuestionIds(topicKey, { userId: user.id });
   }

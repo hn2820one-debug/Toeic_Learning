@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { CheckCircle2, Clock } from "lucide-react";
 
+import ContentClassificationStrip from "@/components/learning/ContentClassificationStrip";
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import AppCard from "@/components/ui/AppCard";
 import { LearningPageCanvas, LearningSurface, learningSectionGap } from "@/components/ui/learning-surface";
 import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import { getLearnDashboardData } from "@/lib/learn-dashboard";
+import { classificationStripFromComposedTask } from "@/lib/learning-content-classification";
 import { composedTaskBadgeKey } from "@/lib/learning-path";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
@@ -147,21 +149,7 @@ export default async function LearnPage({ searchParams }: LearnPageProps) {
                         </div>
                         <h2 className="text-base font-semibold text-slate-900">{task.title}</h2>
                         <p className="text-sm leading-relaxed text-slate-600">{task.reason}</p>
-                        {(task.topicKey || task.primaryLearningSkillCode || task.moduleKey) && (
-                          <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                            {task.topicKey ? (
-                              <code className="rounded bg-slate-100 px-1.5 py-0.5">topicKey: {task.topicKey}</code>
-                            ) : null}
-                            {task.primaryLearningSkillCode ? (
-                              <code className="rounded bg-slate-100 px-1.5 py-0.5">
-                                skill: {task.primaryLearningSkillCode}
-                              </code>
-                            ) : null}
-                            {task.moduleKey ? (
-                              <code className="rounded bg-slate-100 px-1.5 py-0.5">module: {task.moduleKey}</code>
-                            ) : null}
-                          </div>
-                        )}
+                        <ContentClassificationStrip strip={classificationStripFromComposedTask(task)} className="mt-3" />
                       </div>
                       <div className="shrink-0 md:pt-1">
                         <Link

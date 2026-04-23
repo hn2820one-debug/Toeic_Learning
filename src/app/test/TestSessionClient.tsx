@@ -17,7 +17,13 @@ import type { TestQuestionPayloadActive } from "@/lib/test-page-loader";
 import { parseTestItemState, TEST_TIMEOUT_USER_CHOICE, type TestResultSummary } from "@/lib/test-mode";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
-import { completeTestSession, markTestQuestionShown, startTestSession, submitTestAnswer } from "./actions";
+import {
+  completeTestSession,
+  markTestQuestionShown,
+  startTestSession,
+  submitTestAnswer,
+  type TestActionResult,
+} from "./actions";
 
 type TestSessionClientProps = {
   topicKey: string;
@@ -40,7 +46,32 @@ export type TestStartPreset = {
   count?: number;
 };
 
-export function TestStartClient({ topicKey, preset }: { topicKey: string; preset?: TestStartPreset }) {
+function formatTestStartError(r: Extract<TestActionResult, { ok: false }>): string {
+  if (r.error === "insufficient_questions" && r.detail && typeof r.detail === "object") {
+    const d = r.detail as {
+      requestedCount?: number;
+      actualCount?: number;
+      skillCode?: string;
+      hintZh?: string;
+    };
+    return `${d.hintZh ?? "題量不足以完成本場 strict 驗收"}（已選 ${d.actualCount ?? 0} / 目標 ${d.requestedCount ?? "?"}；skill=${d.skillCode ?? "—"}）`;
+  }
+  if (r.error === "skill_required" && r.detail && typeof r.detail === "object") {
+    const d = r.detail as { hintZh?: string };
+    return d.hintZh ?? "驗收必須帶入 skill（primaryLearningSkillCode）。";
+  }
+  return r.error;
+}
+
+export function TestStartClient({
+  topicKey,
+  preset,
+  disabled,
+}: {
+  topicKey: string;
+  preset?: TestStartPreset;
+  disabled?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -49,7 +80,7 @@ export function TestStartClient({ topicKey, preset }: { topicKey: string; preset
     <div>
       <button
         type="button"
-        disabled={pending}
+        disabled={pending || disabled}
         onClick={() => {
           setErr(null);
           startTransition(() => {
@@ -78,7 +109,7 @@ export function TestStartClient({ topicKey, preset }: { topicKey: string; preset
                 }
                 router.push(`/test?${p.toString()}`);
               } else {
-                setErr(r.ok ? null : r.error ?? "failed");
+                setErr(r.ok ? null : formatTestStartError(r));
               }
             });
           });
@@ -88,6 +119,11 @@ export function TestStartClient({ topicKey, preset }: { topicKey: string; preset
         開始驗收 · Start checkpoint
       </button>
       {err ? <p className="mt-2 text-sm text-rose-700">{err}</p> : null}
+      {preset?.mode === "checkpoint" && preset?.skill?.trim() ? (
+        <p className="mt-2 text-xs text-slate-500">
+          題量不足時請補齊題庫，或先以 <span className="font-mono">mixed_practice</span> 做非 strict 練習（仍須帶同一 skill）。
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,13 +1,15 @@
 import Link from "next/link";
 
+import ContentClassificationStrip from "@/components/learning/ContentClassificationStrip";
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import AppCard from "@/components/ui/AppCard";
-import { PHASE1_TOPIC_LABELS } from "@/content/programs/phase1/skill-map";
 import { PHASE1_TOPIC_KEYS_IN_ORDER } from "@/content/programs/phase1/topic-order";
 import type { Phase1TopicKey } from "@/content/programs/phase1/types";
 import PredictionPreferenceToggle from "@/components/practice/PredictionPreferenceToggle";
+import { loadSessionClassificationStrip } from "@/lib/learning-session-classification-strip";
 import { getPracticePageView } from "@/lib/practice/practice-page-loader";
 import { resolvePracticeQuestionCount } from "@/lib/practice/resolve-practice-count";
+import { defaultPrimaryLearningSkillForTopic } from "@/lib/topic-default-skill";
 
 import PracticeSessionClient, { PracticeStartClient, type PracticeStartPreset } from "./PracticeSessionClient";
 
@@ -75,6 +77,16 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
     );
   }
 
+  const skillRequiredButMissing = isGuided && !skill?.trim();
+  const stripSkillCode = skill?.trim() ? skill : defaultPrimaryLearningSkillForTopic(topicKey);
+
+  const practiceStrip = await loadSessionClassificationStrip({
+    topicKey,
+    skillCode: stripSkillCode,
+    moduleKey,
+    mode: "practice",
+  });
+
   const view = await getPracticePageView({ topicKey, sessionId, pos });
 
   if (view.kind === "no_user") {
@@ -96,19 +108,35 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
           titleEn={isGuided ? "Guided dual-axis practice" : "Scaffolded practice"}
           descriptionZh={
             isGuided
-              ? `按技能／主題揀題（約 ${targetQuestionCount} 題）；有提示、可重試，不計正式戰績。題量不足會自動放寬選題。`
-              : "有提示、可重試，不計正式戰績。預設 10 題（題量不足時會自動降級選題）。"
+              ? skill?.trim()
+                ? `按 primary skill 優先揀題（約 ${targetQuestionCount} 題）；有提示、可重試。引導／lesson_drill 模式下不會用「同主題但不同 skill」的題目補滿。`
+                : `按技能／主題揀題（約 ${targetQuestionCount} 題）；有提示、可重試，不計正式戰績。mixed_practice 仍可能放寬選題。`
+              : "有提示、可重試，不計正式戰績。預設 10 題（非引導模式不保證單一 skill strict）。"
           }
           descriptionEn={
             isGuided
-              ? `Skill/topic-aware selection (~${targetQuestionCount} items). Hints and retries; no ELO. Falls back if the bank is thin.`
-              : "Hints and retries; does not update ELO. Target 10 questions with graceful fallback."
+              ? skill?.trim()
+                ? `Skill-first selection (~${targetQuestionCount}). Guided modes avoid wrong-skill backfill.`
+                : `Skill/topic-aware selection (~${targetQuestionCount} items). mixed_practice may still widen the pool.`
+              : "Hints and retries; does not update ELO. Default 10 items; non-guided selection is not strict single-skill."
           }
         />
-        <div className="mb-6 rounded-2xl border border-sky-200/80 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
-          <p className="font-semibold">主題 · Topic</p>
-          <p className="mt-1">{PHASE1_TOPIC_LABELS[topicKey]}</p>
-        </div>
+        <ContentClassificationStrip strip={practiceStrip} className="mb-6" />
+        {skillRequiredButMissing ? (
+          <AppCard padding="md" className="mb-4 border-amber-300 bg-amber-50/95">
+            <p className="text-sm font-semibold text-amber-950">缺少 primary skill（URL）</p>
+            <p className="mt-1 text-sm text-amber-900/95">
+              引導練習必須帶 <code className="rounded bg-amber-100 px-1">skill=</code>（與教材 primaryLearningSkillCode
+              一致）。上方分類條僅以主題預設 skill 顯示示意，不會代替正式參數。
+            </p>
+            <Link
+              href={`/learn/${encodeURIComponent(topicKey)}?primaryLearningSkillCode=${encodeURIComponent(stripSkillCode)}`}
+              className="mt-3 inline-block text-sm font-semibold text-primary-800 underline"
+            >
+              回教材頁（帶入 skill）· Back to learn with skill
+            </Link>
+          </AppCard>
+        ) : null}
         <AppCard padding="md" className="mb-6 border-violet-200/70 bg-violet-50/50">
           <p className="text-sm font-semibold text-violet-950">2 分鐘熱身（建議）</p>
           <p className="mt-1 text-sm text-violet-900/90">
@@ -139,7 +167,7 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
               </div>
             </div>
           ) : null}
-          <PracticeStartClient topicKey={topicKey} preset={startPreset} />
+          <PracticeStartClient topicKey={topicKey} preset={startPreset} disabled={skillRequiredButMissing} />
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={`/learn/${encodeURIComponent(topicKey)}`}
@@ -154,12 +182,18 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
   }
 
   if (view.kind === "session") {
+    const sessionStrip = await loadSessionClassificationStrip({
+      topicKey: view.topicKey,
+      skillCode: view.practiceRuntime?.skill ?? skill,
+      moduleKey: view.practiceRuntime?.moduleKey ?? moduleKey,
+      mode: "practice",
+    });
     if (view.status === "abandoned") {
       return (
         <div>
           <BilingualHeading titleZh="練習" titleEn="Practice" descriptionZh="" descriptionEn="" />
           <AppCard>此場次已放棄。請重新開始。</AppCard>
-          <PracticeStartClient topicKey={view.topicKey} preset={startPreset} />
+          <PracticeStartClient topicKey={view.topicKey} preset={startPreset} disabled={skillRequiredButMissing} />
         </div>
       );
     }
@@ -172,6 +206,7 @@ export default async function PracticePage({ searchParams }: PracticePageProps) 
           descriptionZh={`${view.label} — 非測驗；請分開使用「看提示」與選項作答。`}
           descriptionEn="Not a test — hints are separate from answering."
         />
+        <ContentClassificationStrip strip={sessionStrip} className="mb-4" />
         <PracticeSessionClient
           topicKey={view.topicKey}
           label={view.label}

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import type { Prisma } from "../../../../generated/prisma";
 
@@ -14,6 +14,7 @@ import {
   isAllLessonsUnderstood,
   parseLearnProgressJson,
 } from "@/lib/learn-progress-json";
+import { calendarMonthTagForDate } from "@/lib/calendar/calendar-tags";
 import { prisma } from "@/lib/prisma";
 
 function isPhase1TopicKey(id: string): id is Phase1TopicKey {
@@ -125,6 +126,10 @@ export async function markLessonUnderstoodAction(topicKey: string, lessonPos: nu
     },
     update: updateData,
   });
+
+  if (allDone) {
+    revalidateTag(calendarMonthTagForDate(now));
+  }
 
   revalidatePath(`/learn/${topicKey}`);
   revalidatePath("/learn");

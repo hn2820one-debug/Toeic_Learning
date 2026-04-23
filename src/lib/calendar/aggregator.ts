@@ -8,13 +8,22 @@ import { prisma } from "@/lib/prisma";
 import { isReviewItemRated, parseReviewItemState } from "@/lib/review-mode";
 
 import { calendarMonthTag, formatYmd, isValidYmd, monthBoundsUtc } from "./calendar-tags";
+import { dayHasMeaningfulLearningActivity } from "./meaningful-activity";
 import { aggregateSessionItems, sessionDurationSec, type ItemRow } from "./session-metrics";
 
+/**
+ * Calendar bucketing: every `LearningSession` is assigned to exactly one calendar day using
+ * `startedAt` interpreted in **Asia/Taipei** (YYYY-MM-DD via `formatYmd`). This matches how learners
+ * perceive “today’s study” in local date. Month queries use `[start, end)` month bounds in +08:00.
+ */
 const TZ = "Asia/Taipei";
 
 export type DayCell = {
   date: string;
+  /** True if at least one session started on this day (volume / modes). */
   hasActivity: boolean;
+  /** True if the day had a completed learn topic, checkpoint pass, study-plan day done, or meaningful session work — see `dayHasMeaningfulLearningActivity`. */
+  hasMeaningfulLearningActivity: boolean;
   sessionCount: number;
   totalItems: number;
   correctCount: number;
@@ -22,7 +31,8 @@ export type DayCell = {
   totalMinutes: number;
   modes: string[];
   hintsUsed: number;
-  masteryUpgrades: number;
+  /** Passed `CheckpointAttempt` rows whose `createdAt` falls on this calendar day (not a stage-upgrade count). */
+  checkpointPassCount: number;
   plannedTaskCount: number | null;
   plannedCompleted: number | null;
 };
@@ -76,6 +86,7 @@ export function emptyDayCell(date: string): DayCell {
   return {
     date,
     hasActivity: false,
+    hasMeaningfulLearningActivity: false,
     sessionCount: 0,
     totalItems: 0,
     correctCount: 0,
@@ -83,7 +94,7 @@ export function emptyDayCell(date: string): DayCell {
     totalMinutes: 0,
     modes: [],
     hintsUsed: 0,
-    masteryUpgrades: 0,
+    checkpointPassCount: 0,
     plannedTaskCount: null,
     plannedCompleted: null,
   };
@@ -94,6 +105,7 @@ function accuracyOf(correct: number, total: number): number | null {
   return Math.round((correct / total) * 1000) / 10;
 }
 
+/** Loads sessions whose `startedAt` is in `[start, end)`; day labels are derived with `formatYmd(..., TZ)`. */
 async function loadSessionsInRange(userId: number, start: Date, end: Date) {
   return prisma.learningSession.findMany({
     where: {
@@ -161,6 +173,28 @@ async function computeMonthSummary(userId: number, year: number, month: number):
   const sessions = await loadSessionsInRange(userId, start, end);
   const plannedMap = await loadPlannedByYmd(userId, start, end);
 
+  const learnCompletionsByDay = new Map<string, number>();
+  const learnRows = await prisma.userTopicProgress.findMany({
+    where: {
+      userId,
+      learnCompletedAt: { gte: start, lt: end },
+    },
+    select: { learnCompletedAt: true },
+  });
+  for (const r of learnRows) {
+    if (!r.learnCompletedAt) continue;
+    const k = formatYmd(r.learnCompletedAt, TZ);
+    learnCompletionsByDay.set(k, (learnCompletionsByDay.get(k) ?? 0) + 1);
+  }
+
+  const sessionsByDay = new Map<string, typeof sessions>();
+  for (const s of sessions) {
+    const k = formatYmd(s.startedAt, TZ);
+    const arr = sessionsByDay.get(k) ?? [];
+    arr.push(s);
+    sessionsByDay.set(k, arr);
+  }
+
   const checkpointDayCounts = new Map<string, number>();
   const cpRows = await prisma.checkpointAttempt.findMany({
     where: {
@@ -205,7 +239,8 @@ async function computeMonthSummary(userId: number, year: number, month: number):
 
   for (const [k, cell] of byDay) {
     cell.accuracy = accuracyOf(cell.correctCount, cell.totalItems);
-    cell.masteryUpgrades = checkpointDayCounts.get(k) ?? 0;
+    const cp = checkpointDayCounts.get(k) ?? 0;
+    cell.checkpointPassCount = cp;
     const modes = modeByDay.get(k);
     if (modes) cell.modes = [...modes].sort();
     const p = plannedMap.get(k);
@@ -213,6 +248,17 @@ async function computeMonthSummary(userId: number, year: number, month: number):
       cell.plannedTaskCount = p.tasks;
       cell.plannedCompleted = p.completedRows;
     }
+    const daySessions = sessionsByDay.get(k) ?? [];
+    cell.hasMeaningfulLearningActivity = dayHasMeaningfulLearningActivity({
+      checkpointPassCount: cp,
+      learnTopicCompletionsOnDay: learnCompletionsByDay.get(k) ?? 0,
+      studyPlanCompletedRowCount: p?.completedRows ?? 0,
+      sessions: daySessions.map((s) => ({
+        mode: s.mode,
+        status: s.status,
+        items: s.items as ItemRow[],
+      })),
+    });
   }
 
   return byDay;
@@ -271,6 +317,7 @@ async function computeDayDetail(userId: number, dateStr: string): Promise<DayDet
     include: { topic: { select: { labelZh: true } } },
   });
 
+  /** Snapshot milestones by date; `fromStage` is not historical (no audit table) — only `toStage` is informative. */
   const topicProgress: TopicMove[] = [];
   for (const r of progressRows) {
     const tname = r.topic.labelZh?.trim() || r.topicKey;

@@ -16,12 +16,20 @@ export type BuildCheckpointSpec = {
   skill: string;
   moduleKey?: string | null;
   count: number;
+  /**
+   * When true (default), the skill phase stops after skill+topic / skill-only passes
+   * and does not relax to topic-without-skill or global bank inside that phase.
+   */
+  strictSkillPhase?: boolean;
 };
 
 export type BuildCheckpointResult = {
   questionIds: number[];
   meta: CheckpointRuntimeMeta;
   compositionWarnings: string[];
+  /** Transparent: false when fewer than requested items could be assembled. */
+  status: "ok" | "insufficient_questions";
+  requestedCount: number;
 };
 
 const DIFF_PRIORITY: Array<"B" | "C" | "A"> = ["B", "C", "A"];
@@ -94,6 +102,7 @@ async function fillSkillPhase(
   out: number[],
   warnings: string[],
 ): Promise<void> {
+  const strict = spec.strictSkillPhase !== false;
   const skill = spec.skill.trim();
   const topic = spec.topicKey;
   const need = () => targetLen - out.length;
@@ -108,12 +117,15 @@ async function fillSkillPhase(
     await takeIds({ primaryLearningSkillCode: skill, difficulty: d }, used, need(), out);
   }
   await takeIds({ primaryLearningSkillCode: skill }, used, need(), out);
-  for (const d of DIFF_PRIORITY) {
-    await takeIds({ topicKey: topic, difficulty: d }, used, need(), out);
-  }
-  await takeIds({ topicKey: topic }, used, need(), out);
 
-  if (out.length < targetLen) {
+  if (!strict) {
+    for (const d of DIFF_PRIORITY) {
+      await takeIds({ topicKey: topic, difficulty: d }, used, need(), out);
+    }
+    await takeIds({ topicKey: topic }, used, need(), out);
+  }
+
+  if (out.length < targetLen && !strict) {
     warnings.push("skill_phase:relaxed_constraints");
     await takeIds({}, used, need(), out);
   }
@@ -211,7 +223,15 @@ export async function buildCheckpointQuestionSet(spec: BuildCheckpointSpec): Pro
     secondsPerQuestion: 30,
   };
 
-  return { questionIds: ids, meta, compositionWarnings: warnings };
+  const status = ids.length >= target ? "ok" : "insufficient_questions";
+
+  return {
+    questionIds: ids,
+    meta,
+    compositionWarnings: warnings,
+    status,
+    requestedCount: target,
+  };
 }
 
 export async function buildTestSessionFromQuery(params: {
@@ -236,5 +256,6 @@ export async function buildTestSessionFromQuery(params: {
     skill,
     moduleKey: params.moduleKey ?? null,
     count: n,
+    strictSkillPhase: true,
   });
 }

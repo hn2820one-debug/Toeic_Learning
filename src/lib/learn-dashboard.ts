@@ -8,6 +8,7 @@ import { getOrCreateDevUser } from "@/lib/dev-user";
 import { getQueueStats } from "@/lib/fsrs";
 import type { ComposedLearningTask } from "@/lib/learning-path.types";
 import { mergeTopicOrderWithDb } from "@/lib/learning-path";
+import { enrichComposedTasksWithSkills } from "@/lib/learning-content-classification";
 import { prisma } from "@/lib/prisma";
 import { getActiveStudyPlanView } from "@/lib/study-plan/loader";
 import { buildComposedLearningTasks } from "@/lib/today-task-composer";
@@ -69,7 +70,7 @@ export async function getLearnDashboardData(searchParams?: {
     dbTopics: dbTopics.map((t) => ({ topicKey: t.topicKey, orderIndex: t.orderIndex })),
   });
 
-  const tasks = buildComposedLearningTasks({
+  const rawTasks = buildComposedLearningTasks({
     topicOrder,
     progressByTopic,
     fsrs: { dueCount: queueStats.dueCount, learningDueCount: queueStats.learningCount },
@@ -77,6 +78,19 @@ export async function getLearnDashboardData(searchParams?: {
     labels: Object.keys(labels).length > 0 ? labels : undefined,
     nextRoiSkillCode: nextRoiSkill?.skillCode ?? null,
   });
+
+  const skillCodes = Array.from(
+    new Set(rawTasks.map((t) => t.primaryLearningSkillCode).filter((c): c is string => Boolean(c?.trim()))),
+  );
+  const skillRows =
+    skillCodes.length > 0 && userId
+      ? await prisma.learningSkill.findMany({
+          where: { skillCode: { in: skillCodes } },
+          select: { skillCode: true, labelZh: true, category: true },
+        })
+      : [];
+  const skillByCode = new Map(skillRows.map((r) => [r.skillCode, r] as const));
+  const tasks = enrichComposedTasksWithSkills(rawTasks, skillByCode);
 
   const totalEstimatedMinutes = tasks.reduce((acc, t) => acc + t.estimatedMins, 0);
 

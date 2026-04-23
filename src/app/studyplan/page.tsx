@@ -1,44 +1,21 @@
+import Link from "next/link";
 import { CheckCircle2, Circle, Clock, Target, TrendingUp } from "lucide-react";
 
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import { LearningSurface, learningSectionGap } from "@/components/ui/learning-surface";
+import { buildStudyPlanDayStartLink } from "@/lib/studyplan/build-study-plan-day-links";
 import { getStudyPlanRuntimeView } from "@/lib/studyplan/get-studyplan-runtime-view";
+import { resolvePhase1TopicForPlanSkill } from "@/lib/studyplan/resolve-phase1-topic-for-plan-skill";
+import {
+  activityLabel,
+  dayTypeLabel,
+  taskKindLabel,
+  weekNumber,
+} from "@/lib/studyplan/studyplan-display-meta";
 
 import StudyPlanDayActions from "./StudyPlanDayActions";
 
 export const dynamic = "force-dynamic";
-
-const dayTypeLabel: Record<string, { zh: string; badgeClass: string }> = {
-  A: { zh: "A · 文法 LEARN", badgeClass: "bg-emerald-600 text-white" },
-  B: { zh: "B · 詞彙 PRACTICE", badgeClass: "bg-sky-600 text-white" },
-  C: { zh: "C · 混合閱讀", badgeClass: "bg-indigo-600 text-white" },
-  D: { zh: "D · 鞏固 + TEST", badgeClass: "bg-amber-600 text-white" },
-  special: { zh: "特殊 / 驗收", badgeClass: "bg-rose-600 text-white" },
-};
-
-const activityLabel: Record<string, string> = {
-  warmup: "暖身",
-  review: "複習",
-  learn: "新學",
-  practice: "練習",
-  test: "TEST",
-  mixed_reading: "段落閱讀",
-  mixed_mock: "模考",
-  reflect: "反思/紀錄",
-};
-
-const taskKindLabel: Record<"learn" | "practice" | "checkpoint", string> = {
-  learn: "新學 LEARN",
-  practice: "練習 PRACTICE",
-  checkpoint: "驗收 TEST",
-};
-
-function weekNumber(day: number): number {
-  if (day <= 7) return 1;
-  if (day <= 14) return 2;
-  if (day <= 21) return 3;
-  return 4;
-}
 
 export default async function StudyPlanPage() {
   const plan = await getStudyPlanRuntimeView();
@@ -64,12 +41,12 @@ export default async function StudyPlanPage() {
       <BilingualHeading
         titleZh="30 日學習計劃"
         titleEn="30-Day Study Plan"
-        descriptionZh="每日勾選與活動來自資料庫；主技能若已列入「已完成技能」會顯示提示（唔會自動改你嘅勾選）。"
-        descriptionEn="Day rows and checkboxes are live DB state; runtime hints when plan skill lists disagree — non-destructive."
+        descriptionZh="每日可開詳情頁預覽活動與技能；勾選仍寫入資料庫。主技能若已在「已完成技能」清單會顯示提示（唔會自動改勾選）。"
+        descriptionEn="Open a day for a preview before you start; checkboxes still persist to the DB. Non-destructive hints when skill lists disagree."
       />
 
       <p className="mb-4 max-w-prose text-sm text-slate-600">
-        當日任務類型（新學／練習／驗收）與首頁 CTA 使用同一套規則，方便同 `/learn` 對齊。
+        當日任務類型（新學／練習／驗收）與首頁 CTA 使用同一套規則；「開始」連結依主技能解析到對應 Phase1 主題（詳情頁會列出警告）。
       </p>
 
       <LearningSurface>
@@ -175,10 +152,28 @@ export default async function StudyPlanPage() {
               </p>
             ) : null}
 
-            <div className="mt-4 flex items-center gap-3 border-t border-primary-300/60 pt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-primary-300/60 pt-4">
               <span className="text-sm text-slate-600">
                 Total: <strong>{currentDay.totalMinutes} 分鐘</strong>
               </span>
+              <Link
+                href={`/studyplan/day/${currentDay.dayNumber}`}
+                className="rounded-lg border border-primary-400 bg-white px-3 py-1.5 text-xs font-semibold text-primary-800 hover:bg-primary-100/60"
+              >
+                查看詳情
+              </Link>
+              <Link
+                href={`/studyplan/day/${currentDay.dayNumber}#preview`}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                預覽內容
+              </Link>
+              <Link
+                href={buildStudyPlanDayStartLink(currentDay, resolvePhase1TopicForPlanSkill(currentDay.primarySkillCode).topicKey).href}
+                className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+              >
+                開始
+              </Link>
               <StudyPlanDayActions
                 dailyPlanItemId={currentDay.id}
                 completed={currentDay.completed}
@@ -193,10 +188,15 @@ export default async function StudyPlanPage() {
             <h3 className="text-sm font-semibold text-slate-700">30 日路徑總覽 · Full 30-day path</h3>
           </div>
           <ol className="divide-y divide-slate-100">
-            {plan.days.map((day) => (
+            {plan.days.map((day) => {
+              const startHref = buildStudyPlanDayStartLink(
+                day,
+                resolvePhase1TopicForPlanSkill(day.primarySkillCode).topicKey,
+              ).href;
+              return (
               <li
                 key={day.id}
-                className={`flex items-start gap-4 px-4 py-3 text-sm transition-colors ${
+                className={`flex flex-col gap-3 px-4 py-3 text-sm transition-colors sm:flex-row sm:items-start sm:gap-4 ${
                   day.completed
                     ? "bg-emerald-50/40"
                     : day.dayNumber === plan.currentDayNumber
@@ -215,14 +215,14 @@ export default async function StudyPlanPage() {
                   </span>
                 </div>
                 <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                  className={`w-fit shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                     dayTypeLabel[day.dayType]?.badgeClass ?? "bg-slate-500 text-white"
                   }`}
                 >
                   {day.dayType}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-slate-800">{day.notes ?? "—"}</p>
+                  <p className="font-medium text-slate-800 sm:truncate">{day.notes ?? "—"}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
                     <span>W{weekNumber(day.dayNumber)}</span>
                     <span className="font-mono text-[10px] text-slate-600">{taskKindLabel[day.taskKind]}</span>
@@ -238,13 +238,34 @@ export default async function StudyPlanPage() {
                     <p className="mt-1 text-[11px] text-amber-800/95">{day.runtimeHintZh}</p>
                   ) : null}
                 </div>
-                <StudyPlanDayActions
-                  dailyPlanItemId={day.id}
-                  completed={day.completed}
-                  compact
-                />
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+                  <Link
+                    href={`/studyplan/day/${day.dayNumber}`}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    查看詳情
+                  </Link>
+                  <Link
+                    href={`/studyplan/day/${day.dayNumber}#preview`}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    預覽內容
+                  </Link>
+                  <Link
+                    href={startHref}
+                    className="rounded-md bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-primary-700"
+                  >
+                    開始
+                  </Link>
+                  <StudyPlanDayActions
+                    dailyPlanItemId={day.id}
+                    completed={day.completed}
+                    compact
+                  />
+                </div>
               </li>
-            ))}
+            );
+            })}
           </ol>
         </div>
       </LearningSurface>

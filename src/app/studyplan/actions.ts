@@ -49,6 +49,7 @@ export async function toggleDayComplete(
   });
 
   revalidatePath("/studyplan");
+  revalidatePath(`/studyplan/day/${item.dayNumber}`);
   revalidateTag(calendarMonthTagForDate(item.plannedDate ?? new Date()));
   return { ok: true, dayNumber: item.dayNumber };
 }

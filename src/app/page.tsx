@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen, CheckCircle2, Clock, Layers, Map, Sparkles } from "lucide-react";
 
+import ContentClassificationStrip from "@/components/learning/ContentClassificationStrip";
 import AppCard from "@/components/ui/AppCard";
 import BilingualHeading from "@/components/ui/BilingualHeading";
 import { getDashboardDataV2 } from "@/lib/dashboard/get-dashboard-data-v2";
+import { classificationStripFromComposedTask } from "@/lib/learning-content-classification";
 import { composedTaskBadgeKey } from "@/lib/learning-path";
 import { primaryButtonClass } from "@/lib/ui/form-classes";
 
@@ -71,6 +73,7 @@ export default async function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-slate-900">{d.primaryCta.title}</h3>
                 <p className="text-sm leading-relaxed text-slate-700">{d.primaryCta.reason}</p>
+                <ContentClassificationStrip strip={classificationStripFromComposedTask(d.primaryCta)} className="mt-3" />
               </div>
               <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
